@@ -1,0 +1,13 @@
+export interface CheckIn {
+  id: number;
+  memberId?: number | null;
+  branchId?: number | null;
+  memberName?: string;
+  type?: string;
+  status?: string | null;
+  method?: string | null;
+  source?: string;
+  checkInTime?: string | null;
+  checkOutTime?: string | null;
+  at?: string;
+}

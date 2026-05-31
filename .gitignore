@@ -1,0 +1,25 @@
+# .NET
+bin/
+obj/
+.vs/
+*.user
+*.suo
+
+# React / Vite / Node
+node_modules/
+dist/
+.env
+.env.local
+.env.production
+
+# Expo / Mobile
+.expo/
+build/
+
+# Secrets
+appsettings.Development.json
+secrets.json
+
+# OS
+.DS_Store
+Thumbs.db
