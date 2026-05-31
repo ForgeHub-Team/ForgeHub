@@ -7,18 +7,11 @@ import { LoadingState } from "@/components/ui/LoadingState";
 import { useActiveCheckInLocationWatcher } from "@/features/qr/useActiveCheckInLocationWatcher";
 import { colors } from "@/theme/colors";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { StyleSheet, View } from "react-native";
 
 function RootNavigator() {
   const checkingAuth = useAuthGuard();
   useActiveCheckInLocationWatcher();
-
-  if (checkingAuth) {
-    return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: colors.background, justifyContent: "center" }}>
-        <LoadingState label="Checking session" />
-      </SafeAreaView>
-    );
-  }
 
   return (
     <>
@@ -38,6 +31,13 @@ function RootNavigator() {
         <Stack.Screen name="profile/edit" />
         <Stack.Screen name="classes/[id]" />
       </Stack>
+      {checkingAuth ? (
+        <View style={styles.loadingOverlay}>
+          <SafeAreaView style={styles.loadingSafeArea}>
+            <LoadingState label="Checking session" />
+          </SafeAreaView>
+        </View>
+      ) : null}
     </>
   );
 }
@@ -57,3 +57,15 @@ export default function Layout() {
     </QueryClientProvider>
   );
 }
+
+const styles = StyleSheet.create({
+  loadingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: colors.background,
+    zIndex: 20
+  },
+  loadingSafeArea: {
+    flex: 1,
+    justifyContent: "center"
+  }
+});

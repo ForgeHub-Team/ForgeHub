@@ -16,6 +16,8 @@ import { MemberProfile } from "@/types/profile";
 export interface DashboardStats {
   weeklyAttendance: number[];
   monthlyAttendance: number[];
+  currentMonthAttendance?: number[];
+  previousMonthAttendance?: number[];
   workoutFrequency: number;
   totalCheckIns: number;
   caloriesBurnedEstimate: number;
@@ -25,11 +27,17 @@ export interface DashboardStats {
   averageGymTimeMinutes?: number;
 }
 
+export interface ActivityHeatmapDay {
+  date: string;
+  count: number;
+}
+
 export interface HomeDashboard {
   user: AuthUser | null;
   profile: MemberProfile | null;
   membership: Membership | null;
   stats: DashboardStats;
+  activityHeatmap: ActivityHeatmapDay[];
   bookings: Booking[];
   classes: GymClass[];
   currentGymSession: CurrentGymSession | null;
@@ -43,6 +51,7 @@ export async function getHomeDashboard(): Promise<HomeDashboard> {
     getProfile(),
     getMembership(),
     getJson<DashboardStats>(endpoints.home.stats),
+    getJson<ActivityHeatmapDay[]>(endpoints.home.activityHeatmap),
     getBookings(),
     getClasses(),
     getCurrentGymSession(),
@@ -50,7 +59,7 @@ export async function getHomeDashboard(): Promise<HomeDashboard> {
   ]);
 
   const warnings = settled
-    .map((item, index) => ({ item, label: ["user", "profile", "membership", "stats", "bookings", "classes", "gym session", "notifications"][index] }))
+    .map((item, index) => ({ item, label: ["user", "profile", "membership", "stats", "activity", "bookings", "classes", "gym session", "notifications"][index] }))
     .filter((entry) => entry.item.status === "rejected")
     .map((entry) => entry.label ?? "endpoint");
 
@@ -64,10 +73,11 @@ export async function getHomeDashboard(): Promise<HomeDashboard> {
     profile: value<MemberProfile | null>(1, null),
     membership: value<Membership | null>(2, null),
     stats: value(3, { weeklyAttendance: [], monthlyAttendance: [], workoutFrequency: 0, totalCheckIns: 0, caloriesBurnedEstimate: 0 }),
-    bookings: value<Booking[]>(4, []),
-    classes: value<GymClass[]>(5, []),
-    currentGymSession: value<CurrentGymSession | null>(6, null),
-    notifications: value<NotificationItem[]>(7, []),
+    activityHeatmap: value<ActivityHeatmapDay[]>(4, []),
+    bookings: value<Booking[]>(5, []),
+    classes: value<GymClass[]>(6, []),
+    currentGymSession: value<CurrentGymSession | null>(7, null),
+    notifications: value<NotificationItem[]>(8, []),
     warnings
   };
 }

@@ -26,3 +26,63 @@ button, input, textarea, select {
     @apply focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2;
   }
 }
+
+.print-card {
+  display: none;
+}
+
+.qr-web-preview {
+  background: #ffffff;
+}
+
+.qr-web-preview canvas {
+  display: block;
+  max-width: 100%;
+  height: auto !important;
+}
+
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 0;
+  }
+
+  html,
+  body,
+  #root {
+    width: 210mm;
+    min-height: 297mm;
+    background: #f8f3ec !important;
+  }
+
+  body * {
+    visibility: hidden;
+  }
+
+  .no-print,
+  .no-print * {
+    display: none !important;
+  }
+
+  .print-card,
+  .print-card * {
+    visibility: visible;
+  }
+
+  .print-card {
+    display: block !important;
+    position: fixed !important;
+    inset: 0 !important;
+    width: 210mm !important;
+    min-height: 297mm !important;
+    max-width: none !important;
+    margin: 0 !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+  }
+
+  .qr-placard {
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+}

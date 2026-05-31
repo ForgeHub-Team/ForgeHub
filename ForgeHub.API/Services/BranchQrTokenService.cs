@@ -30,6 +30,22 @@ public class BranchQrTokenService
 
     public bool TryValidate(string token, out long branchId, out DateTimeOffset issuedAtUtc, out string failureReason)
     {
+        return TryValidate(token, enforceExpiry: true, out branchId, out issuedAtUtc, out failureReason);
+    }
+
+    public bool TryValidateStaticBranch(string token, out long branchId, out string failureReason)
+    {
+        var valid = TryValidate(token, enforceExpiry: false, out branchId, out _, out failureReason);
+        if (failureReason.Contains("expired", StringComparison.OrdinalIgnoreCase))
+        {
+            failureReason = "QR token is invalid.";
+        }
+
+        return valid;
+    }
+
+    private bool TryValidate(string token, bool enforceExpiry, out long branchId, out DateTimeOffset issuedAtUtc, out string failureReason)
+    {
         branchId = 0;
         issuedAtUtc = DateTimeOffset.MinValue;
         failureReason = "QR token is invalid.";
@@ -67,7 +83,7 @@ public class BranchQrTokenService
         }
 
         var age = DateTimeOffset.UtcNow - issuedAtUtc;
-        if (age.Duration() > AllowedClockSkew || age < TimeSpan.Zero - AllowedClockSkew)
+        if (enforceExpiry && (age.Duration() > AllowedClockSkew || age < TimeSpan.Zero - AllowedClockSkew))
         {
             failureReason = "QR token expired. Scan the latest branch QR.";
             return false;

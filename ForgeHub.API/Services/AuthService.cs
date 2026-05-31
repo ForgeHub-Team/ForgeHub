@@ -126,9 +126,22 @@ public class AuthService : IAuthService
 
     private static void ValidatePassword(User? user, string password)
     {
-        if (user?.Role == null ||
-            string.IsNullOrWhiteSpace(user.PasswordHash) ||
-            !BCrypt.Net.BCrypt.Verify(password, user.PasswordHash))
+        if (user?.Role == null || string.IsNullOrWhiteSpace(user.PasswordHash))
+        {
+            throw new UnauthorizedAccessException("Invalid email or password.");
+        }
+
+        bool passwordMatches;
+        try
+        {
+            passwordMatches = BCrypt.Net.BCrypt.Verify(password, user.PasswordHash);
+        }
+        catch
+        {
+            throw new UnauthorizedAccessException("Invalid email or password.");
+        }
+
+        if (!passwordMatches)
         {
             throw new UnauthorizedAccessException("Invalid email or password.");
         }

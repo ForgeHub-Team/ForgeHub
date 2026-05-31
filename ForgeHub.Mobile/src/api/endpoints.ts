@@ -9,6 +9,7 @@ export const endpoints = {
     profile: "/member-profile",
     membership: "/Membership",
     stats: "/Stats",
+    activityHeatmap: "/mobile/me/activity-heatmap",
     bookings: "/member/bookings",
     notifications: "/Notifications/me"
   },

@@ -84,16 +84,10 @@ public class MemberBranchAccessService : IMemberBranchAccessService
             throw new CheckInValidationException("Your membership does not include access to this branch.");
         }
 
-        var occupancy = await _context.CheckIns.CountAsync(item => item.BranchId == branch.Id && item.CheckOutTime == null);
-        var dto = ToDto(branch, occupancy, true);
+        var dto = ToDto(branch, 0, true);
         if (!dto.IsOpenNow)
         {
             throw new CheckInValidationException("This branch is currently closed.");
-        }
-
-        if (dto.Status == "Full")
-        {
-            throw new CheckInValidationException("This branch is currently full. Please try another accessible branch or come back later.");
         }
     }
 
@@ -175,7 +169,7 @@ public class MemberBranchAccessService : IMemberBranchAccessService
             CapacityPercentage = percentage,
             Status = status,
             MembershipAccess = membershipAccess,
-            CanCheckIn = membershipAccess && isOpenNow && (!hasCapacityLimit || occupancy < capacity)
+            CanCheckIn = membershipAccess && isOpenNow
         };
     }
 

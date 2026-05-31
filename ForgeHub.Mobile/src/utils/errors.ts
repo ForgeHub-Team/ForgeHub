@@ -56,6 +56,8 @@ export function qrErrorMessage(error: unknown) {
   if (text.includes("membership") && (text.includes("inactive") || text.includes("active"))) return "Your membership is not active.";
   if (text.includes("access")) return "Your membership does not include this branch.";
   if (text.includes("already")) return "You already have an active attendance session.";
-  if (text.includes("expired") || text.includes("invalid") || text.includes("qr")) return "This QR code is invalid or expired.";
+  if (text.includes("latest printed qr") || text.includes("no longer valid")) return "This branch QR was regenerated. Please scan the latest printed QR.";
+  if (text.includes("expired")) return "This QR code is expired. Please scan the latest branch QR.";
+  if (text.includes("invalid") || text.includes("qr")) return "This QR code is invalid. Please scan the official branch QR.";
   return parsed.message;
 }

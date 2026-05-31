@@ -1,7 +1,7 @@
 import { clearSession, getAccessToken, readSession, saveSession } from "../auth/tokenStorage";
 import type { AuthSession, AuthUser } from "../types/auth";
 
-export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:5276/api";
+export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:5156/api";
 
 export class BackendMissingError extends Error {
   constructor(endpoint: string) {

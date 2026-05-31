@@ -24,19 +24,22 @@ public class QrController : ControllerBase
     private readonly MemberExperienceService _memberExperienceService;
     private readonly ICheckInService _checkInService;
     private readonly ICurrentUser _currentUser;
+    private readonly ILogger<QrController> _logger;
 
     public QrController(
         ApplicationDbContext context,
         MemberExperienceService memberExperienceService,
         BranchQrTokenService branchQrTokenService,
         ICheckInService checkInService,
-        ICurrentUser currentUser)
+        ICurrentUser currentUser,
+        ILogger<QrController> logger)
     {
         _context = context;
         _memberExperienceService = memberExperienceService;
         _branchQrTokenService = branchQrTokenService;
         _checkInService = checkInService;
         _currentUser = currentUser;
+        _logger = logger;
     }
 
     [HttpGet("branch/{branchId:long}")]
@@ -117,8 +120,9 @@ public class QrController : ControllerBase
         {
             return BadRequest(new { message = ex.Message });
         }
-        catch (Exception)
+        catch (Exception ex)
         {
+            _logger.LogError(ex, "Unexpected QR scan failure for user {UserId}.", userId);
             return BadRequest(new { message = "Unable to validate this QR code. Please scan the latest branch QR and try again." });
         }
     }

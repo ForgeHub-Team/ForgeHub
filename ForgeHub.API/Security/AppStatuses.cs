@@ -11,9 +11,9 @@ public static class AppStatuses
     public const string BookingBooked = "BOOKED";
     public const string BookingCancelled = "CANCELLED";
 
-    public const string CheckInCheckedIn = "CHECKED_IN";
-    public const string CheckInCheckedOut = "CHECKED_OUT";
-    public const string CheckInAutoCheckedOut = "AUTO_CHECKED_OUT";
+    public const string CheckInCheckedIn = "active";
+    public const string CheckInCheckedOut = "checked_out";
+    public const string CheckInAutoCheckedOut = "auto_checked_out";
 
     public const string PaymentPaid = "PAID";
     public const string PaymentPending = "PENDING";
@@ -63,7 +63,7 @@ public static class AppStatuses
         var normalized = Normalize(value);
         return normalized switch
         {
-            "OPEN" or "CHECKEDIN" or "CHECKED_IN" => CheckInCheckedIn,
+            "OPEN" or "ACTIVE" or "CHECKEDIN" or "CHECKED_IN" => CheckInCheckedIn,
             "CLOSED" or "CHECKEDOUT" or "CHECKED_OUT" => CheckInCheckedOut,
             "AUTOCHECKEDOUT" or "AUTO_CHECKED_OUT" => CheckInAutoCheckedOut,
             _ => CheckInCheckedIn

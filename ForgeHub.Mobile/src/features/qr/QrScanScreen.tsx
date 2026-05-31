@@ -13,6 +13,8 @@ import { colors } from "@/theme/colors";
 import { QrScanResult } from "@/types/checkIn";
 import { qrErrorMessage } from "@/utils/errors";
 
+const cachedLocationMaxAgeMs = 60_000;
+
 export function QrScanScreen() {
   const [permission, requestPermission] = useCameraPermissions();
   const [locationStatus, setLocationStatus] = useState<Location.PermissionStatus | null>(null);
@@ -33,10 +35,21 @@ export function QrScanScreen() {
         throw new Error("Location permission is required for attendance validation.");
       }
 
-      const position = await Promise.race([
-        Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High }),
-        new Promise<never>((_, reject) => setTimeout(() => reject(new Error("Unable to get your location. Please try again.")), 12000))
-      ]);
+      const preciseLocation = getPreciseLocation();
+      const cached = await Location.getLastKnownPositionAsync({ maxAge: cachedLocationMaxAgeMs });
+      if (cached) {
+        try {
+          const result = await scanQr(payload, cached.coords.latitude, cached.coords.longitude);
+          void preciseLocation.catch(() => undefined);
+          return result;
+        } catch (error) {
+          if (!isRangeError(error)) throw error;
+          const precise = await preciseLocation;
+          return scanQr(payload, precise.coords.latitude, precise.coords.longitude);
+        }
+      }
+
+      const position = await preciseLocation;
       return scanQr(payload, position.coords.latitude, position.coords.longitude);
     },
     onSuccess: async (data) => {
@@ -107,7 +120,7 @@ export function QrScanScreen() {
         ) : null}
         {result ? (
           <ForgeCard style={styles.feedback}>
-            <Text style={styles.success}>Check-in confirmed</Text>
+            <Text style={styles.success}>{result.alreadyCheckedIn ? "Already checked in" : "Check-in confirmed"}</Text>
             <Text style={styles.title}>{result.branchName ?? "Branch"}</Text>
             <Text style={styles.text}>{result.message}</Text>
             {result.capacity ? <CapacityBar percentage={((result.currentOccupancy ?? 0) / result.capacity) * 100} /> : null}
@@ -119,6 +132,18 @@ export function QrScanScreen() {
       </View>
     </ForgeScreen>
   );
+}
+
+function getPreciseLocation() {
+  return Promise.race([
+    Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }),
+    new Promise<Location.LocationObject>((_, reject) => setTimeout(() => reject(new Error("Unable to get your location. Please try again.")), 12000))
+  ]);
+}
+
+function isRangeError(error: unknown) {
+  const message = error instanceof Error ? error.message.toLowerCase() : "";
+  return message.includes("outside") || message.includes("range") || message.includes("distance");
 }
 
 const styles = StyleSheet.create({

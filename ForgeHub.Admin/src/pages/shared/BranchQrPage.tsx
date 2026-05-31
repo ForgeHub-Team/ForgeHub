@@ -45,26 +45,66 @@ export function BranchQrPage() {
     const node = printableRef.current;
     if (!node || !qr.data) return;
     const canvas = document.createElement("canvas");
-    canvas.width = 900;
-    canvas.height = 1100;
+    canvas.width = 1200;
+    canvas.height = 1600;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
-    ctx.fillStyle = "#ffffff";
+
+    const roundedRect = (x: number, y: number, width: number, height: number, radius: number) => {
+      ctx.beginPath();
+      ctx.moveTo(x + radius, y);
+      ctx.arcTo(x + width, y, x + width, y + height, radius);
+      ctx.arcTo(x + width, y + height, x, y + height, radius);
+      ctx.arcTo(x, y + height, x, y, radius);
+      ctx.arcTo(x, y, x + width, y, radius);
+      ctx.closePath();
+    };
+
+    ctx.fillStyle = "#F8F3EC";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.fillStyle = "#0f172a";
-    ctx.font = "bold 44px Arial";
-    ctx.fillText("ForgeHub", 80, 90);
-    ctx.font = "bold 36px Arial";
-    ctx.fillText(qr.data.branchName, 80, 155);
-    ctx.font = "24px Arial";
-    ctx.fillText("Scan here to check in", 80, 205);
-    ctx.fillText("Open ForgeHub Mobile App > Check In > Scan QR", 80, 245);
+    ctx.fillStyle = "#111111";
+    roundedRect(80, 80, 1040, 1440, 44);
+    ctx.fill();
+
+    ctx.fillStyle = "#FC6A0A";
+    roundedRect(80, 80, 1040, 190, 44);
+    ctx.fill();
+    ctx.fillStyle = "#111111";
+    ctx.fillRect(80, 220, 1040, 50);
+
+    ctx.fillStyle = "#FFFFFF";
+    ctx.font = "900 54px Arial";
+    ctx.fillText("ForgeHub", 140, 165);
+    ctx.font = "700 24px Arial";
+    ctx.fillText("SECURE MEMBER CHECK-IN", 142, 210);
+
+    ctx.fillStyle = "#F8F3EC";
+    ctx.font = "900 68px Arial";
+    ctx.fillText("Scan to check in", 140, 390);
+    ctx.fillStyle = "#C9B8A8";
+    ctx.font = "700 32px Arial";
+    ctx.fillText(qr.data.branchName, 140, 445);
+
+    ctx.fillStyle = "#FFFFFF";
+    roundedRect(240, 530, 720, 720, 34);
+    ctx.fill();
     const qrCanvas = node.querySelector("canvas");
     if (qrCanvas) {
-      ctx.drawImage(qrCanvas, 230, 310, 440, 440);
+      ctx.drawImage(qrCanvas, 300, 590, 600, 600);
     }
-    ctx.font = "18px monospace";
-    ctx.fillText(qr.data.qrPayload, 80, 1020);
+
+    ctx.fillStyle = "#FC6A0A";
+    roundedRect(150, 1305, 900, 82, 18);
+    ctx.fill();
+    ctx.fillStyle = "#FFFFFF";
+    ctx.font = "900 30px Arial";
+    ctx.fillText("Open ForgeHub Mobile > Check In > Scan QR", 210, 1357);
+
+    ctx.fillStyle = "#C9B8A8";
+    ctx.font = "700 22px Arial";
+    ctx.fillText(`Branch #${qr.data.branchId} - ${qr.data.isActive ? "Active" : "Inactive"}`, 140, 1460);
+    ctx.fillText("Keep this placard visible at the branch entrance.", 140, 1500);
+
     const link = document.createElement("a");
     link.download = `forgehub-${qr.data.branchName.replace(/\s+/g, "-").toLowerCase()}-qr.png`;
     link.href = canvas.toDataURL("image/png");
@@ -87,13 +127,15 @@ export function BranchQrPage() {
 
   return (
     <>
-      <PageHeader
+      <div className="no-print">
+        <PageHeader
         title="Branch QR Codes"
         description="Static branch QR for member check-in. Regenerate only if the printed QR is compromised."
-      />
-      {notice ? <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm font-semibold text-amber-800">{notice}</div> : null}
+        />
+      </div>
+      {notice ? <div className="no-print mb-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm font-semibold text-amber-800">{notice}</div> : null}
       {canSelectBranch && branches.data && branches.data.length > 1 ? (
-        <Card className="mb-4 max-w-xl">
+        <Card className="no-print mb-4 max-w-xl">
           <label className="grid gap-2 text-sm font-bold text-slate-700">
             Branch
             <Select value={resolvedBranchId} onChange={(event) => setSelectedBranchId(Number(event.target.value))}>
@@ -104,19 +146,74 @@ export function BranchQrPage() {
           </label>
         </Card>
       ) : null}
-      <div className="grid gap-6 lg:grid-cols-[1fr_360px]">
-        <Card>
-          <div ref={printableRef} className="print-card flex flex-col items-center gap-5 text-center">
-            <p className="text-sm font-black uppercase tracking-[0.25em] text-forge-primary">ForgeHub</p>
-            <h2 className="text-3xl font-black text-slate-950">{qr.data.branchName}</h2>
-            <p className="text-lg font-bold text-slate-700">Scan here to check in</p>
-            <div className="rounded-2xl bg-white p-4 shadow-inner">
-              <QRCodeCanvas value={qr.data.qrPayload} size={320} level="H" includeMargin />
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
+        <Card className="no-print qr-web-preview bg-white">
+          <div className="mx-auto flex max-w-3xl flex-col items-center justify-center gap-5 px-4 py-6 text-center">
+            <div className="w-full max-w-[380px] rounded-[28px] border border-slate-200 bg-white p-5 shadow-[0_18px_50px_rgba(15,23,42,0.10)]">
+              <QRCodeCanvas value={qr.data.qrPayload} size={340} level="H" includeMargin />
             </div>
-            <p className="text-sm font-semibold text-slate-500">Open ForgeHub Mobile App &gt; Check In &gt; Scan QR</p>
+            <div className="max-w-xl">
+              <p className="text-xs font-black uppercase tracking-[0.22em] text-forge-primary">Branch check-in QR</p>
+              <h2 className="mt-2 break-words text-3xl font-black leading-tight tracking-normal text-slate-950">{qr.data.branchName}</h2>
+              <p className="mt-2 text-sm font-semibold leading-6 text-slate-600">
+                Live QR for member check-in. Print or download uses the A4 entrance placard.
+              </p>
+            </div>
+            <div className="grid w-full max-w-xl gap-3 sm:grid-cols-3">
+              <div className="rounded-xl border border-forge-border bg-slate-50 p-4">
+                <p className="text-xs font-black uppercase text-forge-muted">Branch</p>
+                <p className="mt-1 text-xl font-black text-slate-950">#{qr.data.branchId}</p>
+              </div>
+              <div className="rounded-xl border border-forge-border bg-slate-50 p-4">
+                <p className="text-xs font-black uppercase text-forge-muted">Status</p>
+                <p className={qr.data.isActive ? "mt-1 text-xl font-black text-emerald-600" : "mt-1 text-xl font-black text-red-600"}>
+                  {qr.data.isActive ? "Active" : "Inactive"}
+                </p>
+              </div>
+              <div className="rounded-xl border border-forge-border bg-slate-50 p-4">
+                <p className="text-xs font-black uppercase text-forge-muted">Use</p>
+                <p className="mt-1 text-xl font-black text-slate-950">Entry</p>
+              </div>
+            </div>
           </div>
         </Card>
-        <Card className="space-y-4">
+
+        <div ref={printableRef} className="print-card qr-placard min-h-[860px] max-w-[620px] bg-[#111111] text-[#f8f3ec] shadow-2xl">
+            <div className="bg-forge-primary px-9 py-8 text-black">
+              <p className="text-sm font-black uppercase tracking-[0.28em]">ForgeHub</p>
+              <p className="mt-2 text-xs font-black uppercase tracking-[0.22em]">Secure member check-in</p>
+            </div>
+            <div className="px-9 py-10">
+              <div className="mb-8">
+                <p className="text-sm font-black uppercase tracking-[0.2em] text-forge-primary">Branch access point</p>
+                <h2 className="mt-3 text-5xl font-black leading-tight tracking-normal text-white">{qr.data.branchName}</h2>
+                <p className="mt-4 max-w-md text-xl font-bold text-[#c9b8a8]">Scan to check in with the ForgeHub mobile app.</p>
+              </div>
+              <div className="mx-auto max-w-[440px] rounded-[28px] bg-white p-6 shadow-[0_24px_80px_rgba(0,0,0,0.35)]">
+                <QRCodeCanvas value={qr.data.qrPayload} size={380} level="H" includeMargin />
+              </div>
+              <div className="mt-9 rounded-2xl bg-forge-primary px-6 py-5 text-center text-black">
+                <p className="text-lg font-black">Open ForgeHub Mobile</p>
+                <p className="mt-1 text-sm font-black uppercase tracking-[0.16em]">Check In &gt; Scan QR</p>
+              </div>
+              <div className="mt-8 grid grid-cols-2 gap-3 text-sm">
+                <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+                  <p className="text-xs font-black uppercase tracking-[0.16em] text-[#c9b8a8]">Branch ID</p>
+                  <p className="mt-1 text-2xl font-black text-white">#{qr.data.branchId}</p>
+                </div>
+                <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+                  <p className="text-xs font-black uppercase tracking-[0.16em] text-[#c9b8a8]">Status</p>
+                  <p className={qr.data.isActive ? "mt-1 text-2xl font-black text-emerald-300" : "mt-1 text-2xl font-black text-red-300"}>
+                    {qr.data.isActive ? "Active" : "Inactive"}
+                  </p>
+                </div>
+              </div>
+              <p className="mt-7 text-center text-xs font-bold leading-5 text-[#c9b8a8]">
+                This QR is branch-specific. Replace this placard immediately after regeneration.
+              </p>
+            </div>
+        </div>
+        <Card className="no-print space-y-4">
           <div>
             <p className="text-xs font-bold uppercase text-forge-muted">Branch ID</p>
             <p className="mb-3 font-black text-slate-900">#{qr.data.branchId}</p>

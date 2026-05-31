@@ -6,6 +6,7 @@ using System.Collections.Concurrent;
 using System.Globalization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using Npgsql;
 
 namespace ForgeHub.API.Services;
@@ -39,17 +40,20 @@ public class CheckInService : ICheckInService
     private readonly BranchQrTokenService _qrTokenService;
     private readonly ICurrentUser _currentUser;
     private readonly IMemberBranchAccessService _memberBranchAccessService;
+    private readonly ILogger<CheckInService> _logger;
 
     public CheckInService(
         ApplicationDbContext context,
         BranchQrTokenService qrTokenService,
         ICurrentUser currentUser,
-        IMemberBranchAccessService memberBranchAccessService)
+        IMemberBranchAccessService memberBranchAccessService,
+        ILogger<CheckInService> logger)
     {
         _context = context;
         _qrTokenService = qrTokenService;
         _currentUser = currentUser;
         _memberBranchAccessService = memberBranchAccessService;
+        _logger = logger;
     }
 
     public async Task<object> MobileQrCheckInAsync(long userId, QrScanDto dto)
@@ -77,7 +81,7 @@ public class CheckInService : ICheckInService
         long? parsedBranchId = null;
         try
         {
-            var qr = ParseStaticBranchQr(dto.QrPayload);
+            var qr = ParseBranchQr(dto.QrPayload);
             parsedBranchId = qr.BranchId;
 
             var branch = await _context.Branches.FirstOrDefaultAsync(item => item.Id == qr.BranchId);
@@ -86,11 +90,17 @@ public class CheckInService : ICheckInService
                 throw new CheckInValidationException("Invalid QR code.");
             }
 
-            if (!branch.QrCodeIsActive ||
-                string.IsNullOrWhiteSpace(branch.QrCodeToken) ||
-                !string.Equals(branch.QrCodeToken, qr.Token, StringComparison.Ordinal))
+            if (!branch.QrCodeIsActive)
             {
-                throw new CheckInValidationException("Invalid QR code.");
+                throw new CheckInValidationException("This branch QR is no longer valid. Please scan the latest printed QR.");
+            }
+
+            if (!string.IsNullOrWhiteSpace(qr.Token) &&
+                (string.IsNullOrWhiteSpace(branch.QrCodeToken) ||
+                 !string.Equals(branch.QrCodeToken, qr.Token, StringComparison.Ordinal)))
+            {
+                _logger.LogWarning("QR token mismatch for branch {BranchId}.", branch.Id);
+                throw new CheckInValidationException("This branch QR is no longer valid. Please scan the latest printed QR.");
             }
 
             if (!branch.IsActive)
@@ -119,27 +129,27 @@ public class CheckInService : ICheckInService
 
             var checkInTime = DateTime.UtcNow;
             CheckIn checkIn;
+            var existingOpenSession = await _context.CheckIns
+                .Where(item => item.MemberId == member.Id && item.CheckOutTime == null)
+                .OrderByDescending(item => item.CheckInTime)
+                .FirstOrDefaultAsync();
+
+            if (existingOpenSession != null)
+            {
+                _context.AuditLogs.Add(new AuditLog
+                {
+                    UserId = userId,
+                    Action = "QR_CHECK_IN_DUPLICATE_ACTIVE",
+                    TableName = "check_ins",
+                    RecordId = existingOpenSession.Id,
+                    CreatedAt = DateTime.UtcNow
+                });
+                await _context.SaveChangesAsync();
+                return BuildActiveCheckInResult(existingOpenSession, branch);
+            }
+
             await using (var transaction = await _context.Database.BeginTransactionAsync())
             {
-                var openSession = await _context.CheckIns
-                    .Where(item => item.MemberId == member.Id && item.CheckOutTime == null)
-                    .OrderByDescending(item => item.CheckInTime)
-                    .FirstOrDefaultAsync();
-
-                if (openSession != null)
-                {
-                    _context.AuditLogs.Add(new AuditLog
-                    {
-                        UserId = userId,
-                        Action = "QR_CHECK_IN_DUPLICATE_ACTIVE",
-                        TableName = "check_ins",
-                        RecordId = openSession.Id,
-                        CreatedAt = DateTime.UtcNow
-                    });
-                    await _context.SaveChangesAsync();
-                    throw new CheckInValidationException("You already have an active check-in. Please check out first.", StatusCodes.Status409Conflict);
-                }
-
                 checkIn = new CheckIn
                 {
                     MemberId = member.Id,
@@ -160,6 +170,16 @@ public class CheckInService : ICheckInService
                 {
                     await transaction.RollbackAsync();
                     _context.Entry(checkIn).State = EntityState.Detached;
+                    var activeSession = await _context.CheckIns
+                        .Where(item => item.MemberId == member.Id && item.CheckOutTime == null)
+                        .OrderByDescending(item => item.CheckInTime)
+                        .FirstOrDefaultAsync();
+
+                    if (activeSession != null)
+                    {
+                        return BuildActiveCheckInResult(activeSession, branch);
+                    }
+
                     throw new CheckInValidationException("You already have an active check-in. Please check out first.", StatusCodes.Status409Conflict);
                 }
             }
@@ -357,14 +377,25 @@ public class CheckInService : ICheckInService
 
     private static double DegreesToRadians(double degrees) => degrees * Math.PI / 180d;
 
-    private static (long BranchId, string Token) ParseStaticBranchQr(string qrPayload)
+    private (long BranchId, string? Token) ParseBranchQr(string qrPayload)
     {
-        if (string.IsNullOrWhiteSpace(qrPayload))
+        var payload = NormalizeQrPayload(qrPayload);
+        if (string.IsNullOrWhiteSpace(payload))
         {
             throw new CheckInValidationException("Invalid QR code.");
         }
 
-        var parts = qrPayload.Split('|', StringSplitOptions.TrimEntries);
+        if (payload.StartsWith("FHQR|", StringComparison.Ordinal))
+        {
+            if (_qrTokenService.TryValidateStaticBranch(payload, out var signedBranchId, out _))
+            {
+                return (signedBranchId, null);
+            }
+
+            throw new CheckInValidationException("Invalid QR code.");
+        }
+
+        var parts = payload.Split('|', StringSplitOptions.TrimEntries);
         if (parts.Length != 3 || !string.Equals(parts[0], StaticQrPrefix, StringComparison.Ordinal))
         {
             throw new CheckInValidationException("Invalid QR code.");
@@ -378,6 +409,44 @@ public class CheckInService : ICheckInService
         }
 
         return (branchId, parts[2]);
+    }
+
+    private static object BuildActiveCheckInResult(CheckIn activeSession, Branch branch)
+    {
+        return new
+        {
+            success = true,
+            alreadyCheckedIn = true,
+            message = "You are already checked in.",
+            branchId = activeSession.BranchId ?? branch.Id,
+            branchName = branch.Name,
+            checkInId = activeSession.Id,
+            checkInTimeUtc = activeSession.CheckInTime?.ToUniversalTime()
+        };
+    }
+
+    private static string NormalizeQrPayload(string qrPayload)
+    {
+        var payload = (qrPayload ?? string.Empty).Trim();
+        if (payload.Length == 0)
+        {
+            return string.Empty;
+        }
+
+        payload = Uri.UnescapeDataString(payload);
+        var staticIndex = payload.IndexOf(StaticQrPrefix, StringComparison.Ordinal);
+        if (staticIndex >= 0)
+        {
+            return payload[staticIndex..].Trim();
+        }
+
+        var legacyIndex = payload.IndexOf("FHQR|", StringComparison.Ordinal);
+        if (legacyIndex >= 0)
+        {
+            return payload[legacyIndex..].Trim();
+        }
+
+        return payload;
     }
 
     private static bool IsRateLimited(long memberId)

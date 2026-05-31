@@ -70,6 +70,9 @@ public class StatsController : ControllerBase
                     checkIn.CheckInTime.Value.Year == month.Year);
             })
             .ToList();
+        var currentMonthAttendance = BuildDailyAttendance(recentCheckIns, today.Year, today.Month);
+        var previousMonth = today.AddMonths(-1);
+        var previousMonthAttendance = BuildDailyAttendance(recentCheckIns, previousMonth.Year, previousMonth.Month);
 
         var workouts = await _memberExperienceService.GetWorkoutsAsync(parsedUserId);
         var workoutFrequency = workouts.Count(record => record.CompletedAt >= DateTime.UtcNow.AddDays(-7));
@@ -79,6 +82,8 @@ public class StatsController : ControllerBase
         {
             WeeklyAttendance = weeklyAttendance,
             MonthlyAttendance = monthlyAttendance,
+            CurrentMonthAttendance = currentMonthAttendance,
+            PreviousMonthAttendance = previousMonthAttendance,
             WorkoutFrequency = workoutFrequency,
             TotalCheckIns = recentCheckIns.Count,
             CaloriesBurnedEstimate = calories,
@@ -87,6 +92,18 @@ public class StatsController : ControllerBase
             CurrentStreak = CalculateCurrentStreak(recentCheckIns),
             AverageGymTimeMinutes = Math.Max(0, (int)Math.Round(averageGymTimeMinutes))
         });
+    }
+
+    private static List<int> BuildDailyAttendance(IEnumerable<Models.CheckIn> checkIns, int year, int month)
+    {
+        var daysInMonth = DateTime.DaysInMonth(year, month);
+        return Enumerable.Range(1, daysInMonth)
+            .Select(day => checkIns.Count(checkIn =>
+                checkIn.CheckInTime.HasValue &&
+                checkIn.CheckInTime.Value.Year == year &&
+                checkIn.CheckInTime.Value.Month == month &&
+                checkIn.CheckInTime.Value.Day == day))
+            .ToList();
     }
 
     private static int CalculateCurrentStreak(IEnumerable<Models.CheckIn> checkIns)

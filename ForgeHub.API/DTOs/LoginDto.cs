@@ -139,6 +139,8 @@ public class StatsResponseDto
 {
     public List<int> WeeklyAttendance { get; set; } = [];
     public List<int> MonthlyAttendance { get; set; } = [];
+    public List<int> CurrentMonthAttendance { get; set; } = [];
+    public List<int> PreviousMonthAttendance { get; set; } = [];
     public int WorkoutFrequency { get; set; }
     public int TotalCheckIns { get; set; }
     public int CaloriesBurnedEstimate { get; set; }

@@ -11,7 +11,7 @@ const baseActions = [
   { label: "Timer", icon: "timer-outline", route: "timer" },
   { label: "My Plan", icon: "card-account-details-outline", route: "/membership" },
   { label: "Payments", icon: "credit-card-outline", route: "/tabs/payments" },
-  { label: "Profile", icon: "account-circle-outline", route: "/tabs/profile" }
+  { label: "Capacity", icon: "chart-donut", route: "/branches" }
 ] as const;
 
 export function QuickActionsGrid({ hasActiveSession = false }: { hasActiveSession?: boolean }) {

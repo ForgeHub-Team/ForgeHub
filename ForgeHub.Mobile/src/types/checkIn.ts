@@ -1,8 +1,10 @@
 export interface QrScanResult {
   success: boolean;
+  alreadyCheckedIn?: boolean;
   message: string;
   branchId?: number;
   branchName?: string;
+  checkInId?: number;
   checkInTimeUtc?: string;
   currentOccupancy?: number;
   capacity?: number;
