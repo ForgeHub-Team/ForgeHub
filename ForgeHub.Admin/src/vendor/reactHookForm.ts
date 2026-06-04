@@ -17,7 +17,11 @@ export function useForm<T extends Record<string, unknown>>(options?: { defaultVa
       const values: Record<string, unknown> = {};
       new FormData(form).forEach((value, key) => {
         const input = form.elements.namedItem(key) as HTMLInputElement | null;
-        values[key] = input?.dataset.valueAsNumber === "true" ? Number(value) : value;
+        if (input?.dataset.valueAsNumber === "true") {
+          values[key] = value === "" ? undefined : Number(value);
+          return;
+        }
+        values[key] = value;
       });
       void handler(values as T);
     };
