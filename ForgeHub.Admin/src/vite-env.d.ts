@@ -29,6 +29,7 @@ declare module "lucide-react" {
   export const Building2: (props: IconProps) => JSX.Element;
   export const CalendarDays: (props: IconProps) => JSX.Element;
   export const CreditCard: (props: IconProps) => JSX.Element;
+  export const Download: (props: IconProps) => JSX.Element;
   export const Dumbbell: (props: IconProps) => JSX.Element;
   export const Eye: (props: IconProps) => JSX.Element;
   export const EyeOff: (props: IconProps) => JSX.Element;
@@ -56,7 +57,12 @@ declare module "recharts" {
   export function ResponsiveContainer(props: { children: React.ReactNode; width?: string | number; height?: string | number }): JSX.Element;
   export function BarChart(props: { children: React.ReactNode; data?: unknown[] }): JSX.Element;
   export function Bar(props: Record<string, unknown>): JSX.Element | null;
+  export function Cell(props: Record<string, unknown>): JSX.Element | null;
   export function CartesianGrid(props: Record<string, unknown>): JSX.Element | null;
+  export function Line(props: Record<string, unknown>): JSX.Element | null;
+  export function LineChart(props: { children: React.ReactNode; data?: unknown[] }): JSX.Element;
+  export function Pie(props: Record<string, unknown>): JSX.Element | null;
+  export function PieChart(props: { children: React.ReactNode; data?: unknown[] }): JSX.Element;
   export function Tooltip(props: Record<string, unknown>): JSX.Element | null;
   export function XAxis(props: Record<string, unknown>): JSX.Element | null;
   export function YAxis(props: Record<string, unknown>): JSX.Element | null;

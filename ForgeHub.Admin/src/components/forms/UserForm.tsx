@@ -31,6 +31,7 @@ export function UserForm({
   onSubmit,
   saving = false,
   fixedRoleId,
+  allowedRoleIds,
   initialValues,
   requirePassword = true,
   submitLabel = "Save user"
@@ -38,6 +39,7 @@ export function UserForm({
   onSubmit: (values: UserFormValues) => Promise<void> | void;
   saving?: boolean;
   fixedRoleId?: number;
+  allowedRoleIds?: number[];
   initialValues?: Partial<UserFormValues>;
   requirePassword?: boolean;
   submitLabel?: string;
@@ -55,6 +57,8 @@ export function UserForm({
   const branchOptions = selectedGymId
     ? workspace?.branches.filter((branch) => branch.gymId === selectedGymId) ?? []
     : [];
+  const roleOptions = Object.entries(roleIds).filter(([, id]) => !allowedRoleIds || allowedRoleIds.includes(id));
+  const fixedRoleLabel = Object.entries(roleIds).find(([, id]) => id === fixedRoleId)?.[0] ?? "Staff";
 
   async function loadOptions(force = false) {
     setWorkspaceLoading(true);
@@ -71,6 +75,12 @@ export function UserForm({
   useEffect(() => {
     void loadOptions();
   }, []);
+
+  useEffect(() => {
+    if (!selectedGymId && workspace?.gyms.length === 1) {
+      setSelectedGymId(workspace.gyms[0].id);
+    }
+  }, [selectedGymId, workspace]);
 
   async function submit(values: UserFormValues) {
     const nextFieldErrors: Partial<Record<"fullName" | "email" | "password", string>> = {};
@@ -122,11 +132,11 @@ export function UserForm({
         <>
           <input type="hidden" {...register("roleId", { valueAsNumber: true })} />
           <div className="rounded-lg border border-forge-border bg-slate-50 px-3 py-2 text-sm md:col-span-2">
-            <span className="text-forge-muted">Role fixed to</span> <span className="font-semibold text-slate-900">{roleLabels.GymOwner}</span>
+            <span className="text-forge-muted">Role fixed to</span> <span className="font-semibold text-slate-900">{roleLabels[fixedRoleLabel as keyof typeof roleLabels]}</span>
           </div>
         </>
       ) : (
-        <label>Role<Select {...register("roleId", { valueAsNumber: true })}>{Object.entries(roleIds).map(([role, id]) => <option key={role} value={id}>{role}</option>)}</Select></label>
+        <label>Role<Select {...register("roleId", { valueAsNumber: true })}>{roleOptions.map(([role, id]) => <option key={role} value={id}>{roleLabels[role as keyof typeof roleLabels]}</option>)}</Select></label>
       )}
       <label>Gym<Select name="gymId" data-value-as-number="true" value={selectedGymId ?? ""} disabled={workspaceLoading || Boolean(workspaceError)} onChange={(event) => {
         const nextGymId = event.target.value ? Number(event.target.value) : undefined;

@@ -113,11 +113,13 @@ public class GymsController : ControllerBase
         return Ok(ToGymResponse(gym, await GetOwnerCandidatesAsync()));
     }
 
-    [HttpPost("logo")]
+    [HttpPost("upload-logo")]
     [Authorize(Roles = AppRoles.SuperAdmin)]
+    [Consumes("multipart/form-data")]
     [RequestSizeLimit(5 * 1024 * 1024)]
-    public async Task<IActionResult> UploadLogo([FromForm] IFormFile? file)
+    public async Task<IActionResult> UploadLogo([FromForm] UploadGymLogoRequest request)
     {
+        var file = request.File;
         if (file == null || file.Length == 0)
         {
             return BadRequest(new { message = "Please choose a gym photo to upload." });

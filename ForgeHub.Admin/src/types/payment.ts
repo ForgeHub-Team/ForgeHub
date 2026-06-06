@@ -5,6 +5,8 @@ export interface Payment {
   memberId?: number | null;
   membershipId?: number | null;
   member?: string;
+  branch?: string;
+  plan?: string;
   amount?: string | number;
   amountValue?: number | null;
   method?: string | null;

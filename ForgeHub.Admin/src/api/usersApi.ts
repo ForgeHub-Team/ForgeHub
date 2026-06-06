@@ -1,4 +1,4 @@
-import { del, get, post, put } from "./apiClient";
+import { del, get, patch, post, put } from "./apiClient";
 import type { User } from "../types/user";
 
 export const usersApi = {
@@ -6,7 +6,7 @@ export const usersApi = {
   getUsersByRole: (roleId: number) => get<User[]>("/users", { roleId }),
   createUser: (data: Partial<User> & { password?: string; fullName?: string }) => post<User>("/users", data),
   updateUser: (id: number, data: Partial<User>) => put<User>(`/users/${id}`, data),
-  activateUser: (user: User) => put<User>(`/users/${user.id}`, { ...user, isActive: true }),
-  deactivateUser: (user: User) => put<User>(`/users/${user.id}`, { ...user, isActive: false }),
+  activateUser: (user: User) => patch<User>(`/users/${user.id}/status`, { isActive: true }),
+  deactivateUser: (user: User) => patch<User>(`/users/${user.id}/status`, { isActive: false }),
   deleteUser: (id: number) => del(`/users/${id}`)
 };

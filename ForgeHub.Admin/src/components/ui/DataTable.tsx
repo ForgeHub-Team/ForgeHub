@@ -130,7 +130,7 @@ export function DataTable<T extends { id?: string | number }>({
         <div className="hidden overflow-x-auto md:block">
           <table className="min-w-full text-left text-sm">
             <thead className="bg-slate-50 text-xs uppercase tracking-wide text-forge-muted">
-              <tr>{columns.map((column) => <th className="px-4 py-3" key={String(column.key)}>{column.label}</th>)}{actions.length ? <th className="px-4 py-3 text-right">Actions</th> : null}</tr>
+              <tr>{columns.map((column) => <th className="px-4 py-3" key={String(column.key)}>{column.label}</th>)}{actions.length ? <th className="w-72 px-4 py-3 text-right">Actions</th> : null}</tr>
             </thead>
             <tbody className="divide-y divide-forge-border">
               {filtered.map((row, index) => (
@@ -144,8 +144,8 @@ export function DataTable<T extends { id?: string | number }>({
                     );
                   })}
                   {actions.length ? (
-                    <td className="px-4 py-3">
-                      <div className={`flex flex-wrap justify-end gap-2 ${actionsClassName}`}>
+                    <td className="px-4 py-3 whitespace-nowrap">
+                      <div className={`flex flex-nowrap items-center justify-end gap-2 whitespace-nowrap ${actionsClassName}`}>
                         {actions.filter((action) => !action.hidden?.(row)).map((action) => (
                           <Button
                             type="button"

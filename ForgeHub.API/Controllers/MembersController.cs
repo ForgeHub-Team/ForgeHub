@@ -6,6 +6,7 @@ using ForgeHub.API.Security;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using System.Globalization;
 
 namespace ForgeHub.API.Controllers;
 
@@ -24,7 +25,7 @@ public class MembersController : ControllerBase
     }
 
     [HttpGet]
-    public async Task<IActionResult> GetMembers([FromQuery] long? gymId, [FromQuery] long? branchId)
+    public async Task<IActionResult> GetMembers([FromQuery] long? gymId, [FromQuery] long? branchId, [FromQuery] string? status)
     {
         var query = ApplyScope(_context.Members.AsQueryable());
 
@@ -39,7 +40,86 @@ public class MembersController : ControllerBase
         }
 
         var members = await query.OrderBy(m => m.FullName).ToListAsync();
-        return Ok(members);
+        var memberIds = members.Select(member => member.Id).ToList();
+        var branchIds = members.Where(member => member.HomeBranchId.HasValue).Select(member => member.HomeBranchId!.Value).Distinct().ToList();
+
+        var branches = await _context.Branches
+            .Where(branch => branchIds.Contains(branch.Id))
+            .ToDictionaryAsync(branch => branch.Id, branch => branch.Name);
+
+        var memberships = await _context.MemberMemberships
+            .Where(membership => membership.MemberId.HasValue && memberIds.Contains(membership.MemberId.Value))
+            .OrderByDescending(membership => membership.StartDate)
+            .ToListAsync();
+
+        var plans = await _context.MembershipPlans.ToDictionaryAsync(plan => plan.Id, plan => plan.Name ?? string.Empty);
+
+        var latestPaymentMemberIds = await _context.Payments
+            .Where(payment => payment.MemberId.HasValue && memberIds.Contains(payment.MemberId.Value))
+            .GroupBy(payment => payment.MemberId!.Value)
+            .Select(group => group.Key)
+            .ToListAsync();
+
+        var membershipByMember = memberships
+            .GroupBy(membership => membership.MemberId!.Value)
+            .ToDictionary(group => group.Key, group => group.First());
+
+        var result = members.Select(member =>
+        {
+            membershipByMember.TryGetValue(member.Id, out var membership);
+            var branchName = member.HomeBranchId.HasValue && branches.TryGetValue(member.HomeBranchId.Value, out var name)
+                ? name ?? string.Empty
+                : string.Empty;
+
+            return new AdminMemberDto
+            {
+                Id = member.Id,
+                GymId = member.GymId,
+                BranchId = member.HomeBranchId,
+                Name = member.FullName ?? string.Empty,
+                Email = member.Email ?? string.Empty,
+                Phone = member.Phone ?? string.Empty,
+                PlanId = membership?.PlanId is long planId && plans.TryGetValue(planId, out var planName) && !string.IsNullOrWhiteSpace(planName)
+                    ? planName
+                    : "Unassigned",
+                Status = membership?.Status ?? (member.IsActive ? AppStatuses.MembershipActive : "INACTIVE"),
+                PaymentStatus = latestPaymentMemberIds.Contains(member.Id) ? AppStatuses.PaymentPaid : AppStatuses.PaymentPending,
+                AttendanceToday = "Not checked in",
+                JoinedAt = member.JoinDate?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) ?? string.Empty,
+                MembershipStartDate = membership?.StartDate?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) ?? string.Empty,
+                MembershipEndDate = membership?.EndDate?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) ?? string.Empty,
+                IsActive = member.IsActive
+            };
+        }).Select(member => new
+        {
+            member.Id,
+            member.GymId,
+            member.BranchId,
+            HomeBranchId = member.BranchId,
+            BranchName = member.BranchId.HasValue && branches.TryGetValue(member.BranchId.Value, out var branchName) ? branchName : string.Empty,
+            member.Name,
+            FullName = member.Name,
+            member.Email,
+            member.Phone,
+            member.PlanId,
+            member.TrainerId,
+            member.TrainerName,
+            member.Status,
+            member.PaymentStatus,
+            member.AttendanceToday,
+            member.JoinedAt,
+            member.MembershipStartDate,
+            member.MembershipEndDate,
+            member.IsActive
+        });
+
+        if (!string.IsNullOrWhiteSpace(status))
+        {
+            var normalizedStatus = AppStatuses.Normalize(status);
+            result = result.Where(member => AppStatuses.Normalize(member.Status) == normalizedStatus);
+        }
+
+        return Ok(result.ToList());
     }
 
     [HttpGet("{id:long}")]

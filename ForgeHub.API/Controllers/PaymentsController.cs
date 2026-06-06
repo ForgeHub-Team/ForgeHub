@@ -6,6 +6,7 @@ using ForgeHub.API.Security;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using System.Globalization;
 
 namespace ForgeHub.API.Controllers;
 
@@ -43,7 +44,31 @@ public class PaymentsController : ControllerBase
             query = query.Where(p => p.MemberId == memberId.Value);
         }
 
-        var payments = await query.OrderByDescending(p => p.PaidAt).ToListAsync();
+        var payments = await query
+            .Include(payment => payment.Member)
+            .Include(payment => payment.Branch)
+            .Include(payment => payment.Membership)
+                .ThenInclude(membership => membership!.Plan)
+            .OrderByDescending(p => p.PaidAt)
+            .Select(payment => new AdminPaymentDto
+            {
+                Id = payment.Id,
+                GymId = payment.GymId,
+                BranchId = payment.BranchId,
+                MemberId = payment.MemberId,
+                Member = payment.Member != null ? payment.Member.FullName ?? "Member" : "Member",
+                Branch = payment.Branch != null ? payment.Branch.Name : string.Empty,
+                Plan = payment.Membership != null && payment.Membership.Plan != null ? payment.Membership.Plan.Name ?? string.Empty : string.Empty,
+                AmountValue = payment.Amount,
+                Amount = payment.Amount.HasValue ? $"${payment.Amount.Value:0.##}" : "$0",
+                Method = payment.Method ?? "Unknown",
+                Status = AppStatuses.PaymentPaid,
+                At = payment.PaidAt.HasValue ? payment.PaidAt.Value.ToLocalTime().ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture) : string.Empty,
+                PaidAt = payment.PaidAt,
+                Notes = payment.Notes
+            })
+            .ToListAsync();
+
         return Ok(payments);
     }
 
@@ -93,12 +118,18 @@ public class PaymentsController : ControllerBase
     {
         try
         {
+            var member = request.MemberId.HasValue
+                ? await _context.Members.FirstOrDefaultAsync(item => item.Id == request.MemberId.Value)
+                : null;
+            var scopedGymId = _currentUser.IsInRole(AppRoles.SuperAdmin) ? request.GymId : _currentUser.GymId;
+            var scopedBranchId = _currentUser.IsInRole(AppRoles.GymOwner) || _currentUser.IsInRole(AppRoles.SuperAdmin)
+                ? request.BranchId ?? member?.HomeBranchId
+                : _currentUser.BranchId;
+
             var payment = new Payment
             {
-                GymId = _currentUser.IsInRole(AppRoles.SuperAdmin) ? request.GymId : _currentUser.GymId,
-                BranchId = _currentUser.IsInRole(AppRoles.GymOwner) || _currentUser.IsInRole(AppRoles.SuperAdmin)
-                    ? request.BranchId
-                    : _currentUser.BranchId,
+                GymId = scopedGymId ?? member?.GymId,
+                BranchId = scopedBranchId,
                 MemberId = request.MemberId,
                 MembershipId = request.MembershipId,
                 ReceivedByUserId = _currentUser.UserId,

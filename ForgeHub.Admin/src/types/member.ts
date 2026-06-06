@@ -3,6 +3,7 @@ export interface Member {
   gymId?: number | null;
   branchId?: number | null;
   homeBranchId?: number | null;
+  branchName?: string;
   name?: string;
   fullName?: string;
   email?: string;

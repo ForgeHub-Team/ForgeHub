@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using Microsoft.AspNetCore.Http;
 
 namespace ForgeHub.API.DTOs;
 
@@ -51,6 +52,12 @@ public class UpdateGymRequest : CreateGymRequest
 {
 }
 
+public class UploadGymLogoRequest
+{
+    [Required]
+    public IFormFile File { get; set; } = default!;
+}
+
 public class CreateBranchRequest
 {
     public long? GymId { get; set; }
@@ -61,8 +68,8 @@ public class CreateBranchRequest
     public decimal? RangeKm { get; set; }
     public int? Capacity { get; set; }
     public decimal? AreaSqm { get; set; }
-    public double Lat { get; set; }
-    public double Lng { get; set; }
+    public double? Lat { get; set; }
+    public double? Lng { get; set; }
     public TimeOnly? OpenTime { get; set; }
     public TimeOnly? CloseTime { get; set; }
     public bool IsActive { get; set; } = true;
@@ -304,12 +311,15 @@ public class AdminPaymentDto
     public long? BranchId { get; set; }
     public long? MemberId { get; set; }
     public string Member { get; set; } = string.Empty;
+    public string Branch { get; set; } = string.Empty;
+    public string Plan { get; set; } = string.Empty;
     public decimal? AmountValue { get; set; }
     public string Amount { get; set; } = string.Empty;
     public string Method { get; set; } = string.Empty;
     public string Status { get; set; } = "Completed";
     public string At { get; set; } = string.Empty;
     public DateTime? PaidAt { get; set; }
+    public string? Notes { get; set; }
 }
 
 public class AdminAttendanceDto

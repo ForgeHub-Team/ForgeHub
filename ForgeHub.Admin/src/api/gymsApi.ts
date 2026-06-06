@@ -11,7 +11,7 @@ export const gymsApi = {
   uploadLogo: (file: File) => {
     const data = new FormData();
     data.append("file", file);
-    return postForm<{ logoUrl: string }>("/gyms/logo", data);
+    return postForm<{ logoUrl: string }>("/gyms/upload-logo", data);
   },
   deleteGym: (id: number) => del(`/gyms/${id}`)
 };

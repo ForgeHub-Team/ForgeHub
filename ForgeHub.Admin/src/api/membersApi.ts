@@ -1,4 +1,4 @@
-import { del, get, post, put } from "./apiClient";
+import { del, get, patch, post, put } from "./apiClient";
 import type { Member, MemberPersonalInfo } from "../types/member";
 
 export const membersApi = {
@@ -9,7 +9,7 @@ export const membersApi = {
   updateMember: (id: number, data: Partial<Member>) => put<Member>(`/members/${id}`, data),
   getMemberPersonalInfo: (id: number) => get<MemberPersonalInfo>(`/members/${id}/personal-info`),
   updateMemberPersonalInfo: (id: number, data: Partial<MemberPersonalInfo>) => put<MemberPersonalInfo>(`/members/${id}/personal-info`, data),
-  activateMember: (member: Member) => put<Member>(`/members/${member.id}`, { ...member, isActive: true }),
-  deactivateMember: (member: Member) => put<Member>(`/members/${member.id}`, { ...member, isActive: false }),
+  activateMember: (member: Member) => patch<Member>(`/members/${member.id}/status`, { isActive: true }),
+  deactivateMember: (member: Member) => patch<Member>(`/members/${member.id}/status`, { isActive: false }),
   deleteMember: (id: number) => del(`/members/${id}`)
 };
