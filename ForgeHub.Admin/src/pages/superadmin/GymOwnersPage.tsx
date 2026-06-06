@@ -27,6 +27,37 @@ export function GymOwnersPage() {
           }}
         />
       )}
+      editForm={(row, close, _reload, notify, updateRow, refresh) => (
+        <UserForm
+          fixedRoleId={roleIds.GymOwner}
+          requirePassword={false}
+          submitLabel="Save owner"
+          initialValues={{
+            fullName: row.fullName ?? row.name ?? "",
+            email: row.email ?? "",
+            phone: row.phone ?? "",
+            roleId: roleIds.GymOwner,
+            gymId: row.gymId ?? undefined,
+            branchId: row.branchId ?? undefined,
+            isActive: row.isActive ?? true
+          }}
+          onSubmit={async (values) => {
+            const saved = await usersApi.updateUser(row.id, {
+              fullName: values.fullName,
+              email: values.email,
+              phone: values.phone,
+              roleId: roleIds.GymOwner,
+              gymId: values.gymId,
+              branchId: values.branchId,
+              isActive: values.isActive ?? row.isActive ?? true
+            });
+            updateRow(saved);
+            await refresh();
+            close();
+            notify(`${saved.name ?? saved.fullName ?? "Gym owner"} saved successfully.`);
+          }}
+        />
+      )}
     />
   );
 }

@@ -22,7 +22,8 @@ export interface DataColumn<T> {
 
 export interface RowAction<T> {
   label: string;
-  variant?: "secondary" | "danger" | "ghost";
+  variant?: "primary" | "secondary" | "danger" | "ghost";
+  className?: string;
   hidden?: (row: T) => boolean;
   onClick: (row: T) => void;
 }
@@ -34,7 +35,10 @@ export function DataTable<T extends { id?: string | number }>({
   onCreate,
   createLabel = "Create",
   onRowClick,
-  actions = []
+  actions = [],
+  toolbar,
+  actionsClassName = "",
+  actionButtonClassName = ""
 }: {
   title: string;
   rows: T[];
@@ -43,6 +47,9 @@ export function DataTable<T extends { id?: string | number }>({
   createLabel?: string;
   onRowClick?: (row: T) => void;
   actions?: RowAction<T>[];
+  toolbar?: React.ReactNode;
+  actionsClassName?: string;
+  actionButtonClassName?: string;
 }) {
   const [query, setQuery] = useState("");
   const filtered = useMemo(() => {
@@ -56,6 +63,7 @@ export function DataTable<T extends { id?: string | number }>({
       <div className="flex flex-col gap-3 border-b border-forge-border p-3 sm:p-4 md:flex-row md:items-center md:justify-between">
         <h2 className="text-lg font-bold text-slate-950">{title}</h2>
         <div className="flex flex-col gap-2 sm:flex-row">
+          {toolbar}
           <SearchInput value={query} onChange={setQuery} placeholder={`Search ${title.toLowerCase()}`} />
           {onCreate ? <Button onClick={onCreate}>{createLabel}</Button> : null}
         </div>
@@ -104,7 +112,7 @@ export function DataTable<T extends { id?: string | number }>({
                         type="button"
                         key={action.label}
                         variant={action.variant ?? "secondary"}
-                        className="min-h-10 flex-1"
+                        className={`min-h-10 flex-1 ${actionButtonClassName} ${action.className ?? ""}`}
                         onClick={(event) => {
                           event.stopPropagation();
                           action.onClick(row);
@@ -137,12 +145,13 @@ export function DataTable<T extends { id?: string | number }>({
                   })}
                   {actions.length ? (
                     <td className="px-4 py-3">
-                      <div className="flex flex-wrap justify-end gap-2">
+                      <div className={`flex flex-wrap justify-end gap-2 ${actionsClassName}`}>
                         {actions.filter((action) => !action.hidden?.(row)).map((action) => (
                           <Button
                             type="button"
                             key={action.label}
                             variant={action.variant ?? "secondary"}
+                            className={`${actionButtonClassName} ${action.className ?? ""}`}
                             onClick={(event) => {
                               event.stopPropagation();
                               action.onClick(row);

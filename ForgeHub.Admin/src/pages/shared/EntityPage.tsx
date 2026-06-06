@@ -17,7 +17,9 @@ export function EntityPage<T extends { id?: number | string }>({
   form,
   editForm,
   detailRenderer,
-  actions = []
+  actions = [],
+  actionsClassName,
+  actionButtonClassName
 }: {
   title: string;
   description?: string;
@@ -25,16 +27,29 @@ export function EntityPage<T extends { id?: number | string }>({
   columns: DataColumn<T>[];
   createLabel?: string;
   form?: (close: () => void, reload: () => void, notify: (message: string) => void) => React.ReactNode;
-  editForm?: (row: T, close: () => void, reload: () => void) => React.ReactNode;
+  editForm?: (
+    row: T,
+    close: () => void,
+    reload: () => void,
+    notify: (message: string) => void,
+    updateRow: (row: T) => void,
+    refresh: () => Promise<void>
+  ) => React.ReactNode;
   detailRenderer?: (row: T) => React.ReactNode;
   actions?: RowAction<T>[];
+  actionsClassName?: string;
+  actionButtonClassName?: string;
 }) {
-  const { data, loading, error, reload } = useApi(loader, []);
+  const { data, loading, error, reload, refresh, setData } = useApi(loader, []);
   const [open, setOpen] = useState(false);
   const [details, setDetails] = useState<T | null>(null);
   const [editing, setEditing] = useState<T | null>(null);
   const [confirm, setConfirm] = useState<{ title: string; message: string; action: () => Promise<void> | void } | null>(null);
   const [notice, setNotice] = useState("");
+  const [actionError, setActionError] = useState("");
+  function updateRow(updatedRow: T) {
+    setData((current) => current?.map((row) => row.id === updatedRow.id ? updatedRow : row) ?? [updatedRow]);
+  }
   const wrappedActions: RowAction<T>[] = [
     { label: "View", variant: "secondary", onClick: setDetails },
     ...(editForm ? [{ label: "Edit", variant: "secondary" as const, onClick: setEditing }] : []),
@@ -46,6 +61,7 @@ export function EntityPage<T extends { id?: number | string }>({
             title: action.label,
             message: `Confirm ${action.label.toLowerCase()} for this record?`,
             action: async () => {
+              setActionError("");
               await action.onClick(row);
               setConfirm(null);
               setNotice(`${action.label} completed.`);
@@ -54,7 +70,15 @@ export function EntityPage<T extends { id?: number | string }>({
           });
           return;
         }
-        action.onClick(row);
+        setActionError("");
+        void Promise.resolve(action.onClick(row))
+          .then(async () => {
+            setNotice(`${action.label} completed.`);
+            await reload();
+          })
+          .catch((err) => {
+            setActionError(err instanceof Error ? err.message : `Unable to ${action.label.toLowerCase()}.`);
+          });
       }
     }))
   ];
@@ -65,9 +89,10 @@ export function EntityPage<T extends { id?: number | string }>({
     <>
       <PageHeader title={title} description={description} />
       {notice ? <div className="mb-3 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm font-semibold text-emerald-700">{notice}</div> : null}
-      <DataTable title={title} rows={data ?? []} columns={columns} createLabel={createLabel} onCreate={form ? () => setOpen(true) : undefined} actions={wrappedActions} />
+      {actionError ? <div className="mb-3 rounded-lg border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700">{actionError}</div> : null}
+      <DataTable title={title} rows={data ?? []} columns={columns} createLabel={createLabel} onCreate={form ? () => setOpen(true) : undefined} actions={wrappedActions} actionsClassName={actionsClassName} actionButtonClassName={actionButtonClassName} />
       {form ? <Modal open={open} title={createLabel ?? "Create"} onClose={() => setOpen(false)}>{form(() => setOpen(false), reload, setNotice)}</Modal> : null}
-      {editForm && editing ? <Modal open={Boolean(editing)} title={`Edit ${title}`} onClose={() => setEditing(null)}>{editForm(editing, () => setEditing(null), reload)}</Modal> : null}
+      {editForm && editing ? <Modal open={Boolean(editing)} title={`Edit ${title}`} onClose={() => setEditing(null)}>{editForm(editing, () => setEditing(null), reload, setNotice, updateRow, refresh)}</Modal> : null}
       <Modal open={Boolean(details)} title={`${title} details`} onClose={() => setDetails(null)}>
         {details && detailRenderer ? detailRenderer(details) : (
           <dl className="grid gap-3 text-sm md:grid-cols-2">
@@ -85,7 +110,10 @@ export function EntityPage<T extends { id?: number | string }>({
         title={confirm?.title ?? "Confirm action"}
         message={confirm?.message ?? "Confirm this action?"}
         onClose={() => setConfirm(null)}
-        onConfirm={() => void confirm?.action()}
+        onConfirm={async () => {
+          setActionError("");
+          await confirm?.action();
+        }}
       />
     </>
   );

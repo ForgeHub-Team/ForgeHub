@@ -44,15 +44,24 @@ public class UsersController : ControllerBase
             query = query.Where(u => u.RoleId == roleId.Value);
         }
 
+        var gyms = await _context.Gyms.ToListAsync();
+        var branches = await _context.Branches.ToListAsync();
         var users = await query.OrderBy(u => u.FullName).ToListAsync();
-        return Ok(users);
+        return Ok(users.Select(user => ToAdminUser(user, gyms, branches)).ToList());
     }
 
     [HttpGet("{id:long}")]
     public async Task<IActionResult> GetUser(long id)
     {
         var user = await ApplyScope(_context.Users.Include(u => u.Role).AsQueryable()).FirstOrDefaultAsync(u => u.Id == id);
-        return user == null ? NotFound() : Ok(user);
+        if (user == null)
+        {
+            return NotFound();
+        }
+
+        var gyms = await _context.Gyms.ToListAsync();
+        var branches = await _context.Branches.ToListAsync();
+        return Ok(ToAdminUser(user, gyms, branches));
     }
 
     [HttpPost]
@@ -103,8 +112,13 @@ public class UsersController : ControllerBase
 
             _context.Users.Add(user);
             await _context.SaveChangesAsync();
+            await SyncGymOwnerAssignmentAsync(user, requestedRole.Name, scopedGymId);
+            await _context.SaveChangesAsync();
 
-            return CreatedAtAction(nameof(GetUser), new { id = user.Id }, user);
+            var gyms = await _context.Gyms.ToListAsync();
+            var branches = await _context.Branches.ToListAsync();
+            user.Role = requestedRole;
+            return CreatedAtAction(nameof(GetUser), new { id = user.Id }, ToAdminUser(user, gyms, branches));
         }
         catch (Exception ex)
         {
@@ -159,8 +173,13 @@ public class UsersController : ControllerBase
             user.Phone = request.Phone;
             user.IsActive = request.IsActive;
 
+            await SyncGymOwnerAssignmentAsync(user, requestedRole.Name, nextGymId);
             await _context.SaveChangesAsync();
-            return Ok(user);
+
+            var gyms = await _context.Gyms.ToListAsync();
+            var branches = await _context.Branches.ToListAsync();
+            user.Role = requestedRole;
+            return Ok(ToAdminUser(user, gyms, branches));
         }
         catch (Exception ex)
         {
@@ -337,5 +356,57 @@ public class UsersController : ControllerBase
             RecordId = recordId,
             CreatedAt = DateTime.UtcNow
         });
+    }
+
+    private async Task SyncGymOwnerAssignmentAsync(User user, string? roleName, long? gymId)
+    {
+        if (!string.Equals(roleName, AppRoles.GymOwner, StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        var previousGyms = await _context.Gyms
+            .Where(gym => gym.OwnerUserId == user.Id && (!gymId.HasValue || gym.Id != gymId.Value))
+            .ToListAsync();
+
+        foreach (var gym in previousGyms)
+        {
+            gym.OwnerUserId = null;
+        }
+
+        if (!gymId.HasValue)
+        {
+            return;
+        }
+
+        var selectedGym = await _context.Gyms.FirstOrDefaultAsync(gym => gym.Id == gymId.Value);
+        if (selectedGym != null)
+        {
+            selectedGym.OwnerUserId = user.Id;
+        }
+    }
+
+    private static AdminUserDto ToAdminUser(User user, IReadOnlyCollection<Gym> gyms, IReadOnlyCollection<Branch> branches)
+    {
+        var ownedGym = gyms.FirstOrDefault(gym => gym.OwnerUserId == user.Id);
+        var scopedGym = gyms.FirstOrDefault(gym => gym.Id == user.GymId);
+        var gymName = scopedGym?.Name ?? ownedGym?.Name ?? "ForgeHub";
+        var branchName = branches.FirstOrDefault(branch => branch.Id == user.BranchId)?.Name ?? gymName;
+        var roleName = user.Role?.Name ?? string.Empty;
+
+        return new AdminUserDto
+        {
+            Id = user.Id,
+            GymId = user.GymId ?? ownedGym?.Id,
+            BranchId = user.BranchId,
+            RoleId = user.RoleId,
+            Name = user.FullName ?? string.Empty,
+            Email = user.Email ?? string.Empty,
+            Phone = user.Phone ?? string.Empty,
+            Role = roleName,
+            Title = roleName,
+            Workspace = branchName,
+            IsActive = user.IsActive
+        };
     }
 }

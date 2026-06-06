@@ -67,15 +67,16 @@ async function request<T>(method: string, path: string, data?: unknown, params?:
   Object.entries(params ?? {}).forEach(([key, value]) => {
     if (value !== undefined && value !== null && value !== "") url.searchParams.set(key, String(value));
   });
+  const isFormData = typeof FormData !== "undefined" && data instanceof FormData;
   let response: Response;
   try {
     response = await fetch(url.toString(), {
       method,
       headers: {
-        "Content-Type": "application/json",
+        ...(isFormData ? {} : { "Content-Type": "application/json" }),
         ...(token ? { Authorization: `Bearer ${token}` } : {})
       },
-      body: data === undefined ? undefined : JSON.stringify(data)
+      body: data === undefined ? undefined : isFormData ? data : JSON.stringify(data)
     });
   } catch {
     throw new Error("Unable to load data. Please verify that the backend API is running and VITE_API_BASE_URL is correct.");
@@ -120,6 +121,14 @@ export async function post<T>(path: string, data?: unknown) {
 
 export async function put<T>(path: string, data?: unknown) {
   return request<T>("PUT", path, data);
+}
+
+export async function patch<T>(path: string, data?: unknown) {
+  return request<T>("PATCH", path, data);
+}
+
+export async function postForm<T>(path: string, data: FormData) {
+  return request<T>("POST", path, data);
 }
 
 export async function del<T = void>(path: string) {

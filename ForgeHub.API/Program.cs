@@ -163,6 +163,7 @@ if (!app.Environment.IsDevelopment())
     app.UseHttpsRedirection();
 }
 app.UseCors("DevCors");
+app.UseStaticFiles();
 
 app.UseAuthentication();
 app.UseAuthorization();
