@@ -25,21 +25,39 @@ public class MembersController : ControllerBase
     }
 
     [HttpGet]
-    public async Task<IActionResult> GetMembers([FromQuery] long? gymId, [FromQuery] long? branchId, [FromQuery] string? status)
+    public async Task<IActionResult> GetMembers(
+        [FromQuery] long? gymId,
+        [FromQuery] long? branchId,
+        [FromQuery] string? status,
+        [FromQuery] string? attendance,
+        [FromQuery] string? query,
+        [FromQuery] int? page,
+        [FromQuery] int? pageSize)
     {
-        var query = ApplyScope(_context.Members.AsQueryable());
+        var membersQuery = ApplyScope(_context.Members.AsQueryable());
 
         if (gymId.HasValue)
         {
-            query = query.Where(m => m.GymId == gymId.Value);
+            membersQuery = membersQuery.Where(m => m.GymId == gymId.Value);
         }
 
         if (branchId.HasValue)
         {
-            query = query.Where(m => m.HomeBranchId == branchId.Value);
+            membersQuery = membersQuery.Where(m => m.HomeBranchId == branchId.Value);
         }
 
-        var members = await query.OrderBy(m => m.FullName).ToListAsync();
+        if (!string.IsNullOrWhiteSpace(query))
+        {
+            var search = query.Trim().ToLowerInvariant();
+            var isNumericSearch = long.TryParse(search, NumberStyles.Integer, CultureInfo.InvariantCulture, out var searchId);
+            membersQuery = membersQuery.Where(member =>
+                (member.FullName != null && member.FullName.ToLower().Contains(search)) ||
+                (member.Email != null && member.Email.ToLower().Contains(search)) ||
+                (member.Phone != null && member.Phone.ToLower().Contains(search)) ||
+                (isNumericSearch && member.Id == searchId));
+        }
+
+        var members = await membersQuery.OrderBy(m => m.FullName).ToListAsync();
         var memberIds = members.Select(member => member.Id).ToList();
         var branchIds = members.Where(member => member.HomeBranchId.HasValue).Select(member => member.HomeBranchId!.Value).Distinct().ToList();
 
@@ -64,6 +82,27 @@ public class MembersController : ControllerBase
             .GroupBy(membership => membership.MemberId!.Value)
             .ToDictionary(group => group.Key, group => group.First());
 
+        var todayStart = DateTime.UtcNow.Date;
+        var todayEnd = todayStart.AddDays(1);
+        var now = DateTime.UtcNow;
+        var todayCheckedInMemberIds = await _context.CheckIns
+            .Where(checkIn => checkIn.MemberId.HasValue &&
+                memberIds.Contains(checkIn.MemberId.Value) &&
+                checkIn.CheckInTime >= todayStart &&
+                checkIn.CheckInTime < todayEnd)
+            .Select(checkIn => checkIn.MemberId!.Value)
+            .Distinct()
+            .ToListAsync();
+        var activeCheckedInMemberIds = await _context.CheckIns
+            .Where(checkIn => checkIn.MemberId.HasValue &&
+                memberIds.Contains(checkIn.MemberId.Value) &&
+                (!checkIn.CheckOutTime.HasValue || checkIn.CheckOutTime.Value > now))
+            .Select(checkIn => checkIn.MemberId!.Value)
+            .Distinct()
+            .ToListAsync();
+        var todaySet = todayCheckedInMemberIds.ToHashSet();
+        var activeSet = activeCheckedInMemberIds.ToHashSet();
+
         var result = members.Select(member =>
         {
             membershipByMember.TryGetValue(member.Id, out var membership);
@@ -84,7 +123,11 @@ public class MembersController : ControllerBase
                     : "Unassigned",
                 Status = membership?.Status ?? (member.IsActive ? AppStatuses.MembershipActive : "INACTIVE"),
                 PaymentStatus = latestPaymentMemberIds.Contains(member.Id) ? AppStatuses.PaymentPaid : AppStatuses.PaymentPending,
-                AttendanceToday = "Not checked in",
+                AttendanceToday = activeSet.Contains(member.Id)
+                    ? "Currently checked in"
+                    : todaySet.Contains(member.Id)
+                        ? "Checked in today"
+                        : "Not checked in today",
                 JoinedAt = member.JoinDate?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) ?? string.Empty,
                 MembershipStartDate = membership?.StartDate?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) ?? string.Empty,
                 MembershipEndDate = membership?.EndDate?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) ?? string.Empty,
@@ -119,7 +162,41 @@ public class MembersController : ControllerBase
             result = result.Where(member => AppStatuses.Normalize(member.Status) == normalizedStatus);
         }
 
-        return Ok(result.ToList());
+        if (!string.IsNullOrWhiteSpace(attendance))
+        {
+            var normalizedAttendance = AppStatuses.Normalize(attendance);
+            result = normalizedAttendance switch
+            {
+                "CURRENT" or "CURRENTLY_CHECKED_IN" => result.Where(member => activeSet.Contains(member.Id)),
+                "TODAY" or "CHECKED_IN_TODAY" => result.Where(member => todaySet.Contains(member.Id)),
+                "NOT_TODAY" or "NOT_CHECKED_IN_TODAY" => result.Where(member => !todaySet.Contains(member.Id)),
+                _ => result
+            };
+        }
+
+        var resultList = result.ToList();
+        if (page.HasValue || pageSize.HasValue)
+        {
+            var safePageSize = Math.Clamp(pageSize ?? 15, 1, 100);
+            var safePage = Math.Max(page ?? 1, 1);
+            var totalCount = resultList.Count;
+            var totalPages = Math.Max(1, (int)Math.Ceiling(totalCount / (double)safePageSize));
+            var items = resultList
+                .Skip((safePage - 1) * safePageSize)
+                .Take(safePageSize)
+                .ToList();
+
+            return Ok(new
+            {
+                items,
+                totalCount,
+                page = safePage,
+                pageSize = safePageSize,
+                totalPages
+            });
+        }
+
+        return Ok(resultList);
     }
 
     [HttpGet("{id:long}")]

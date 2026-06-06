@@ -21,9 +21,6 @@ export function RegisterMemberPage() {
     homeBranchId: "",
     membershipPlanId: "",
     startDate: new Date().toISOString().slice(0, 10),
-    heightCm: "",
-    weightKg: "",
-    fitnessGoal: "",
     trainerUserId: "",
     paymentAmount: "",
     paymentMethod: "Card",
@@ -55,9 +52,6 @@ export function RegisterMemberPage() {
         homeBranchId: Number(form.homeBranchId),
         membershipPlanId: Number(form.membershipPlanId),
         startDate: form.startDate,
-        heightCm: form.heightCm ? Number(form.heightCm) : undefined,
-        weightKg: form.weightKg ? Number(form.weightKg) : undefined,
-        fitnessGoal: form.fitnessGoal || undefined,
         trainerUserId: form.trainerUserId ? Number(form.trainerUserId) : undefined,
         paymentAmount: form.paymentAmount ? Number(form.paymentAmount) : undefined,
         paymentMethod: form.paymentMethod,
@@ -72,9 +66,6 @@ export function RegisterMemberPage() {
         dob: "",
         phone: "",
         email: "",
-        heightCm: "",
-        weightKg: "",
-        fitnessGoal: "",
         trainerUserId: "",
         paymentAmount: "",
         notes: ""
@@ -101,9 +92,6 @@ export function RegisterMemberPage() {
           <label>Home branch<Select required value={form.homeBranchId} onChange={(e) => update("homeBranchId", e.target.value)}><option value="">Assigned branch</option>{options.data?.branches.map((branch) => <option key={branch.id} value={branch.id}>{branch.name}</option>)}</Select></label>
           <label>Membership plan<Select required value={form.membershipPlanId} onChange={(e) => update("membershipPlanId", e.target.value)}><option value="">Select plan</option>{options.data?.membershipPlans.filter((plan) => !form.homeBranchId || plan.gymId === options.data?.branches.find((branch) => branch.id === Number(form.homeBranchId))?.gymId).map((plan) => <option key={plan.id} value={plan.id}>{plan.name}{plan.price ? ` - $${plan.price}` : ""}</option>)}</Select></label>
           <label>Start date<Input type="date" value={form.startDate} onChange={(e) => update("startDate", e.target.value)} /></label>
-          <label>Height (cm)<Input type="number" min="0" value={form.heightCm} onChange={(e) => update("heightCm", e.target.value)} /></label>
-          <label>Weight (kg)<Input type="number" min="0" value={form.weightKg} onChange={(e) => update("weightKg", e.target.value)} /></label>
-          <label>Fitness goal<Input value={form.fitnessGoal} onChange={(e) => update("fitnessGoal", e.target.value)} /></label>
           <label>Trainer<Select value={form.trainerUserId} onChange={(e) => update("trainerUserId", e.target.value)}><option value="">No trainer assignment</option>{options.data?.trainers.filter((trainer) => !form.homeBranchId || trainer.branchId === Number(form.homeBranchId)).map((trainer) => <option key={trainer.id} value={trainer.id}>{trainer.fullName}</option>)}</Select></label>
           <label>Payment amount<Input type="number" value={form.paymentAmount} onChange={(e) => update("paymentAmount", e.target.value)} /></label>
           <label>Payment method<Select value={form.paymentMethod} onChange={(e) => update("paymentMethod", e.target.value)}><option>Card</option><option>Cash</option><option>Transfer</option></Select></label>

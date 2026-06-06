@@ -262,6 +262,55 @@ public class AdminMemberDto
     public bool IsActive { get; set; }
 }
 
+public class StaffMemberSearchDto
+{
+    public long Id { get; set; }
+    public long? GymId { get; set; }
+    public long? BranchId { get; set; }
+    public long? HomeBranchId { get; set; }
+    public string BranchName { get; set; } = string.Empty;
+    public string Name { get; set; } = string.Empty;
+    public string FullName { get; set; } = string.Empty;
+    public string Email { get; set; } = string.Empty;
+    public string Phone { get; set; } = string.Empty;
+    public string PlanId { get; set; } = string.Empty;
+    public string Status { get; set; } = string.Empty;
+    public string PaymentStatus { get; set; } = string.Empty;
+    public string AttendanceToday { get; set; } = string.Empty;
+    public string JoinedAt { get; set; } = string.Empty;
+    public string MembershipStartDate { get; set; } = string.Empty;
+    public string MembershipEndDate { get; set; } = string.Empty;
+    public bool IsActive { get; set; }
+}
+
+public class PagedResultDto<T>
+{
+    public List<T> Items { get; set; } = [];
+    public int TotalCount { get; set; }
+    public int Page { get; set; }
+    public int PageSize { get; set; }
+    public int TotalPages { get; set; }
+}
+
+public class CreateOneDayPassDto
+{
+    public decimal? AmountPaid { get; set; }
+    public string? PaymentMethod { get; set; }
+    public string? Notes { get; set; }
+}
+
+public class OneDayPassResponseDto
+{
+    public long CheckInId { get; set; }
+    public string DisplayName { get; set; } = "One Day Pass";
+    public long BranchId { get; set; }
+    public string BranchName { get; set; } = string.Empty;
+    public DateTime CheckInTime { get; set; }
+    public DateTime AutoCheckOutTime { get; set; }
+    public bool IsAutoCheckOut { get; set; } = true;
+    public string Status { get; set; } = "Active";
+}
+
 public class AdminUserDto
 {
     public long Id { get; set; }

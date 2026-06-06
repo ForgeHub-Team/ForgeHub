@@ -37,7 +37,7 @@ public class DashboardController : ControllerBase
         var revenue = await payments.SumAsync(item => item.Amount ?? 0m);
         var todayAttendance = await checkIns.CountAsync(item =>
             item.CheckInTime >= todayStart && item.CheckInTime < todayEnd);
-        var activeCheckIns = await checkIns.CountAsync(item => item.CheckOutTime == null);
+        var activeCheckIns = await checkIns.CountAsync(item => !item.CheckOutTime.HasValue || item.CheckOutTime.Value > DateTime.UtcNow);
         var classBookings = await (
             from booking in _context.ClassBookings
             join gymClass in classes on booking.ClassId equals gymClass.Id

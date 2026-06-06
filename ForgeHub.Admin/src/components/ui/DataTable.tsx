@@ -37,6 +37,8 @@ export function DataTable<T extends { id?: string | number }>({
   onRowClick,
   actions = [],
   toolbar,
+  searchValue,
+  onSearchChange,
   actionsClassName = "",
   actionButtonClassName = ""
 }: {
@@ -48,15 +50,19 @@ export function DataTable<T extends { id?: string | number }>({
   onRowClick?: (row: T) => void;
   actions?: RowAction<T>[];
   toolbar?: React.ReactNode;
+  searchValue?: string;
+  onSearchChange?: (value: string) => void;
   actionsClassName?: string;
   actionButtonClassName?: string;
 }) {
   const [query, setQuery] = useState("");
+  const effectiveQuery = searchValue ?? query;
+  const setEffectiveQuery = onSearchChange ?? setQuery;
   const filtered = useMemo(() => {
-    if (!query) return rows;
-    const q = query.toLowerCase();
+    if (!effectiveQuery) return rows;
+    const q = effectiveQuery.toLowerCase();
     return rows.filter((row) => JSON.stringify(row).toLowerCase().includes(q));
-  }, [rows, query]);
+  }, [rows, effectiveQuery]);
 
   return (
     <section className="overflow-hidden rounded-2xl border border-forge-border bg-white shadow-panel">
@@ -64,7 +70,7 @@ export function DataTable<T extends { id?: string | number }>({
         <h2 className="text-lg font-bold text-slate-950">{title}</h2>
         <div className="flex flex-col gap-2 sm:flex-row">
           {toolbar}
-          <SearchInput value={query} onChange={setQuery} placeholder={`Search ${title.toLowerCase()}`} />
+          <SearchInput value={effectiveQuery} onChange={setEffectiveQuery} placeholder={`Search ${title.toLowerCase()}`} />
           {onCreate ? <Button onClick={onCreate}>{createLabel}</Button> : null}
         </div>
       </div>

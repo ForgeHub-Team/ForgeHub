@@ -29,9 +29,6 @@ export interface MemberOnboardingPayload {
   homeBranchId: number;
   membershipPlanId: number;
   startDate: string;
-  heightCm?: number;
-  weightKg?: number;
-  fitnessGoal?: string;
   paymentAmount?: number;
   paymentMethod?: string;
   notes?: string;

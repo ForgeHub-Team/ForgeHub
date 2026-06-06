@@ -184,7 +184,7 @@ public class CheckInService : ICheckInService
                 }
             }
 
-            var currentOccupancy = await _context.CheckIns.CountAsync(item => item.BranchId == branch.Id && item.CheckOutTime == null);
+            var currentOccupancy = await _context.CheckIns.CountAsync(item => item.BranchId == branch.Id && (!item.CheckOutTime.HasValue || item.CheckOutTime.Value > DateTime.UtcNow));
             _context.AuditLogs.Add(new AuditLog
             {
                 UserId = userId,

@@ -65,8 +65,7 @@ export const menuByRole: Record<Role, MenuItem[]> = {
     { label: "Renew Membership", path: "/staff/renew-membership", icon: Shield },
     { label: "Payments", path: "/staff/payments", icon: CreditCard },
     { label: "Check-in / Check-out", path: "/staff/manual-check-in", icon: ListChecks },
-    { label: "Branch QR", path: "/staff/branch-qr", icon: FileText },
-    { label: "Today Attendance", path: "/staff/today-attendance", icon: Activity }
+    { label: "Branch QR", path: "/staff/branch-qr", icon: FileText }
   ],
   Trainer: [
     { label: "Dashboard", path: "/trainer/dashboard", icon: Home },

@@ -292,7 +292,7 @@ function BranchManagerDashboard({ data }: { data: AdminWorkspace }) {
 function StaffDashboard({ data }: { data: AdminWorkspace }) {
   const pendingPayments = countBy(data.members, (member) => statusIncludes(member.paymentStatus, "pending"));
   const expiring = data.members.filter((member) => isExpiringWithin(member, 14) || isExpiredMembership(member));
-  const inside = countBy(data.members, (member) => statusIncludes(member.attendanceToday, "checked in"));
+  const inside = countBy(data.members, (member) => statusIncludes(member.attendanceToday, "currently checked in"));
   const todaysAttendance = data.attendance.filter((item) => isToday(item.checkInTime ?? item.at ?? null));
 
   return (
@@ -323,7 +323,7 @@ function StaffDashboard({ data }: { data: AdminWorkspace }) {
       </div>
       <div className="mt-6 grid gap-6 xl:grid-cols-2">
         <RecentMembers title="Member Status" members={data.members.slice(0, 10)} />
-        <DataTable title="Recent Check-ins" rows={data.attendance.slice(0, 10)} columns={[{ key: "memberName", label: "Member" }, { key: "status", label: "Status", badge: true }, { key: "at", label: "Time" }, { key: "source", label: "Source" }]} />
+        <DataTable title="Today Attendance" rows={todaysAttendance.slice(0, 15)} columns={[{ key: "memberName", label: "Member" }, { key: "status", label: "Status", badge: true }, { key: "at", label: "Time" }, { key: "source", label: "Source" }]} />
       </div>
     </>
   );

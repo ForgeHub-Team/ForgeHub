@@ -134,6 +134,57 @@ public class CheckInsController : ControllerBase
         }
     }
 
+    [HttpPost("one-day-pass")]
+    [Authorize(Roles = AppRoles.AdminOperatorRoles)]
+    public async Task<IActionResult> CreateOneDayPass()
+    {
+        var branchId = _currentUser.BranchId;
+        if (!branchId.HasValue)
+        {
+            return BadRequest(new { message = "A staff branch assignment is required for one-day pass check-in." });
+        }
+
+        var branch = await _context.Branches.FirstOrDefaultAsync(item => item.Id == branchId.Value && item.IsActive);
+        if (branch == null)
+        {
+            return BadRequest(new { message = "Assigned branch does not exist or is inactive." });
+        }
+
+        if (!CanManageBranch(branch))
+        {
+            return Forbid();
+        }
+
+        var checkInTime = DateTime.UtcNow;
+        var autoCheckOutTime = checkInTime.AddMinutes(90);
+        var checkIn = new CheckIn
+        {
+            MemberId = null,
+            BranchId = branch.Id,
+            CheckInTime = checkInTime,
+            LastSeenAt = checkInTime,
+            CheckOutTime = autoCheckOutTime,
+            Status = AppStatuses.CheckInCheckedIn,
+            Method = "ONE_DAY_PASS",
+            CheckOutMethod = "AUTO_ONE_DAY_PASS_90_MIN"
+        };
+
+        _context.CheckIns.Add(checkIn);
+        await _context.SaveChangesAsync();
+
+        _context.AuditLogs.Add(new AuditLog
+        {
+            UserId = _currentUser.UserId,
+            Action = "ONE_DAY_PASS_CHECK_IN",
+            TableName = "check_ins",
+            RecordId = checkIn.Id,
+            CreatedAt = checkInTime
+        });
+        await _context.SaveChangesAsync();
+
+        return Ok(ToAttendanceDto(checkIn, []));
+    }
+
     [HttpPost("auto-checkout")]
     [Authorize(Roles = AppRoles.Member)]
     public async Task<IActionResult> AutoCheckOut([FromBody] AutoCheckOutRequest request)
@@ -378,25 +429,49 @@ public class CheckInsController : ControllerBase
         return false;
     }
 
+    private bool CanManageBranch(Branch branch)
+    {
+        if (_currentUser.IsInRole(AppRoles.SuperAdmin))
+        {
+            return true;
+        }
+
+        if (_currentUser.IsInRole(AppRoles.GymOwner))
+        {
+            return _currentUser.GymId.HasValue && branch.GymId == _currentUser.GymId;
+        }
+
+        if (_currentUser.IsInRole(AppRoles.BranchManager) || _currentUser.IsInRole(AppRoles.Staff))
+        {
+            return _currentUser.BranchId.HasValue && branch.Id == _currentUser.BranchId;
+        }
+
+        return false;
+    }
+
     private static AdminAttendanceDto ToAttendanceDto(CheckIn checkIn, IReadOnlyCollection<CheckIn> history)
     {
         var suspicion = DetectSuspicion(checkIn, history);
+        var isActive = IsActiveCheckIn(checkIn, DateTime.UtcNow);
+        var isOneDayPass = IsOneDayPass(checkIn);
         return new AdminAttendanceDto
         {
             Id = checkIn.Id,
             MemberId = checkIn.MemberId,
             BranchId = checkIn.BranchId,
-            MemberName = checkIn.Member?.FullName ?? "Member",
-            Type = "Member",
-            Status = checkIn.CheckOutTime.HasValue
+            MemberName = isOneDayPass ? "One Day Pass" : checkIn.Member?.FullName ?? "Member",
+            Type = isOneDayPass ? "Guest" : "Member",
+            Status = isActive
+                ? "Checked in"
+                : checkIn.CheckOutTime.HasValue
                 ? (IsAutoCheckOut(checkIn) ? "Auto checked out" : "Checked out")
                 : "Checked in",
             At = checkIn.CheckInTime?.ToLocalTime().ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture) ?? string.Empty,
             CheckInTime = checkIn.CheckInTime,
             CheckOutTime = checkIn.CheckOutTime,
-            Source = checkIn.CheckOutTime.HasValue
-                ? $"{checkIn.Method ?? "Front desk"} -> {checkIn.CheckOutMethod ?? "manual"}"
-                : checkIn.Method ?? "Front desk",
+            Source = isActive
+                ? checkIn.Method ?? "Front desk"
+                : $"{checkIn.Method ?? "Front desk"} -> {checkIn.CheckOutMethod ?? "manual"}",
             IsSuspicious = suspicion.IsSuspicious,
             SuspicionReason = suspicion.Reason,
             SuspicionLevel = suspicion.Level
@@ -452,4 +527,10 @@ public class CheckInsController : ControllerBase
         string.Equals(AppStatuses.NormalizeCheckIn(checkIn.Status), AppStatuses.CheckInAutoCheckedOut, StringComparison.Ordinal) ||
         (checkIn.CheckOutMethod?.Contains("auto", StringComparison.OrdinalIgnoreCase) == true) ||
         (checkIn.CheckOutMethod?.Contains("geofence", StringComparison.OrdinalIgnoreCase) == true);
+
+    private static bool IsOneDayPass(CheckIn checkIn) =>
+        string.Equals(checkIn.Method, "ONE_DAY_PASS", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsActiveCheckIn(CheckIn checkIn, DateTime now) =>
+        !checkIn.CheckOutTime.HasValue || checkIn.CheckOutTime.Value > now;
 }

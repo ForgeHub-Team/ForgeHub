@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { checkInsApi } from "../../api/checkInsApi";
 import { dashboardApi } from "../../api/dashboardApi";
 import { membershipsApi } from "../../api/membershipsApi";
 import { paymentsApi } from "../../api/paymentsApi";
@@ -36,6 +37,7 @@ export function RenewMembershipPage() {
   const [paymentAmount, setPaymentAmount] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("Card");
   const [saving, setSaving] = useState(false);
+  const [creatingPass, setCreatingPass] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
@@ -87,6 +89,22 @@ export function RenewMembershipPage() {
     }
   }
 
+  async function createOneDayPass() {
+    setCreatingPass(true);
+    setError("");
+    setMessage("");
+    try {
+      const pass = await checkInsApi.createOneDayPass();
+      const until = pass.autoCheckOutTime ? new Date(pass.autoCheckOutTime).toLocaleString() : "90 minutes from now";
+      setMessage(`${pass.displayName || "One Day Pass"} checked in at ${pass.branchName || "assigned branch"} until ${until}.`);
+      await workspace.reload();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to create one-day pass.");
+    } finally {
+      setCreatingPass(false);
+    }
+  }
+
   if (workspace.loading || memberships.loading) return <LoadingState />;
   if (workspace.error) return <ErrorState message={workspace.error} />;
   if (memberships.error) return <ErrorState message={memberships.error} />;
@@ -97,6 +115,16 @@ export function RenewMembershipPage() {
 
       {message ? <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm font-semibold text-emerald-700">{message}</div> : null}
       {error ? <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700">{error}</div> : null}
+
+      <Card>
+        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <div>
+            <h2 className="text-lg font-bold text-slate-950">One Day Pass</h2>
+            <p className="text-sm text-forge-muted">Create a temporary branch visitor and check them in for 1 hour and 30 minutes.</p>
+          </div>
+          <Button type="button" disabled={creatingPass} onClick={createOneDayPass}>{creatingPass ? "Creating..." : "One Day Pass"}</Button>
+        </div>
+      </Card>
 
       <Card>
         <form onSubmit={submit} className="grid gap-4 lg:grid-cols-2">

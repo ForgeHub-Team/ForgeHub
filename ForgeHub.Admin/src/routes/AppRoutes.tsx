@@ -35,7 +35,6 @@ import { RegisterMemberPage } from "../pages/staff/RegisterMemberPage";
 import { RenewMembershipPage } from "../pages/staff/RenewMembershipPage";
 import { StaffDashboard } from "../pages/staff/StaffDashboard";
 import { StaffPaymentsPage } from "../pages/staff/StaffPaymentsPage";
-import { TodayAttendancePage } from "../pages/staff/TodayAttendancePage";
 import { TrainerClassesPage } from "../pages/trainer/TrainerClassesPage";
 import { TrainerDashboard } from "../pages/trainer/TrainerDashboard";
 import { TrainerMembersPage } from "../pages/trainer/TrainerMembersPage";
@@ -107,7 +106,7 @@ export function AppRoutes() {
             <Route path="/staff/renew-membership" element={<RenewMembershipPage />} />
             <Route path="/staff/payments" element={<StaffPaymentsPage />} />
             <Route path="/staff/manual-check-in" element={<ManualCheckInPage />} />
-            <Route path="/staff/today-attendance" element={<TodayAttendancePage />} />
+            <Route path="/staff/today-attendance" element={<Navigate to="/staff/dashboard" replace />} />
             <Route path="/staff/branch-qr" element={<BranchQrPage />} />
           </Route>
           <Route element={<RoleGuard allowed={["Trainer"]} />}>

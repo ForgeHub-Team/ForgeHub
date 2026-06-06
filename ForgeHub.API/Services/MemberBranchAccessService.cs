@@ -46,8 +46,9 @@ public class MemberBranchAccessService : IMemberBranchAccessService
 
         var branches = await GetAllowedBranches(member, activeMembership.PlanId.Value);
         var branchIds = branches.Select(item => item.Id).ToList();
+        var now = DateTime.UtcNow;
         var occupancies = await _context.CheckIns
-            .Where(item => item.BranchId.HasValue && branchIds.Contains(item.BranchId.Value) && item.CheckOutTime == null)
+            .Where(item => item.BranchId.HasValue && branchIds.Contains(item.BranchId.Value) && (!item.CheckOutTime.HasValue || item.CheckOutTime.Value > now))
             .GroupBy(item => item.BranchId!.Value)
             .Select(group => new { BranchId = group.Key, Count = group.Count() })
             .ToDictionaryAsync(item => item.BranchId, item => item.Count);

@@ -208,6 +208,7 @@ public class AdminController : ControllerBase
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
         var todayStart = DateTime.UtcNow.Date;
         var todayEnd = todayStart.AddDays(1);
+        var now = DateTime.UtcNow;
 
         var checkInsQuery = _context.CheckIns.AsQueryable();
         if (branchIds.Count > 0)
@@ -228,6 +229,11 @@ public class AdminController : ControllerBase
             .Where(checkIn => checkIn.MemberId.HasValue)
             .Select(checkIn => checkIn.MemberId!.Value)
             .ToHashSet();
+        var activeCheckedInMemberIds = await checkInsQuery
+            .Where(checkIn => checkIn.MemberId.HasValue && (!checkIn.CheckOutTime.HasValue || checkIn.CheckOutTime.Value > now))
+            .Select(checkIn => checkIn.MemberId!.Value)
+            .ToListAsync();
+        var activeCheckedInMemberIdSet = activeCheckedInMemberIds.ToHashSet();
 
         var notifications = await _context.NotificationRecipients
             .Where(recipient => recipient.UserId == currentUserId)
@@ -338,7 +344,11 @@ public class AdminController : ControllerBase
                         : "Unassigned",
                     Status = memberMembership?.Status ?? (member.IsActive ? AppStatuses.MembershipActive : "INACTIVE"),
                     PaymentStatus = latestPayment == null ? AppStatuses.PaymentPending : AppStatuses.PaymentPaid,
-                    AttendanceToday = todayCheckedInMemberIds.Contains(member.Id) ? "Checked in" : "Not checked in",
+                    AttendanceToday = activeCheckedInMemberIdSet.Contains(member.Id)
+                        ? "Currently checked in"
+                        : todayCheckedInMemberIds.Contains(member.Id)
+                            ? "Checked in today"
+                            : "Not checked in today",
                     JoinedAt = member.JoinDate?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) ?? string.Empty,
                     MembershipStartDate = memberMembership?.StartDate?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) ?? string.Empty,
                     MembershipEndDate = memberMembership?.EndDate?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) ?? string.Empty,
@@ -383,15 +393,19 @@ public class AdminController : ControllerBase
                 Id = checkIn.Id,
                 MemberId = checkIn.MemberId,
                 BranchId = checkIn.BranchId,
-                MemberName = members.FirstOrDefault(member => member.Id == checkIn.MemberId)?.FullName ?? "Member",
-                Type = "Member",
-                Status = checkIn.CheckOutTime.HasValue ? "Checked out" : "Checked in",
+                MemberName = string.Equals(checkIn.Method, "ONE_DAY_PASS", StringComparison.OrdinalIgnoreCase)
+                    ? "One Day Pass"
+                    : members.FirstOrDefault(member => member.Id == checkIn.MemberId)?.FullName ?? "Member",
+                Type = string.Equals(checkIn.Method, "ONE_DAY_PASS", StringComparison.OrdinalIgnoreCase) ? "Guest" : "Member",
+                Status = !checkIn.CheckOutTime.HasValue || checkIn.CheckOutTime.Value > now
+                    ? "Checked in"
+                    : "Checked out",
                 At = checkIn.CheckInTime?.ToLocalTime().ToString("hh:mm tt", CultureInfo.InvariantCulture) ?? string.Empty,
                 CheckInTime = checkIn.CheckInTime,
                 CheckOutTime = checkIn.CheckOutTime,
-                Source = checkIn.CheckOutTime.HasValue
-                    ? $"{checkIn.Method ?? "Front desk"} -> {checkIn.CheckOutMethod ?? "manual"}"
-                    : checkIn.Method ?? "Front desk"
+                Source = !checkIn.CheckOutTime.HasValue || checkIn.CheckOutTime.Value > now
+                    ? checkIn.Method ?? "Front desk"
+                    : $"{checkIn.Method ?? "Front desk"} -> {checkIn.CheckOutMethod ?? "manual"}"
             }).ToList(),
             Notifications = notifications,
             Subscriptions = subscriptions.Count > 0
