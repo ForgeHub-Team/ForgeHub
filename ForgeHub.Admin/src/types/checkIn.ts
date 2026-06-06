@@ -10,4 +10,7 @@ export interface CheckIn {
   checkInTime?: string | null;
   checkOutTime?: string | null;
   at?: string;
+  isSuspicious?: boolean;
+  suspicionReason?: string;
+  suspicionLevel?: "none" | "low" | "medium" | "high" | string;
 }

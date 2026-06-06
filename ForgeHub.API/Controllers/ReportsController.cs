@@ -1,8 +1,11 @@
 using ForgeHub.API.Data;
+using ForgeHub.API.DTOs;
+using ForgeHub.API.Models;
 using ForgeHub.API.Security;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using System.Globalization;
 
 namespace ForgeHub.API.Controllers;
 
@@ -12,10 +15,158 @@ namespace ForgeHub.API.Controllers;
 public class ReportsController : ControllerBase
 {
     private readonly ApplicationDbContext _context;
+    private readonly ICurrentUser _currentUser;
 
-    public ReportsController(ApplicationDbContext context)
+    public ReportsController(ApplicationDbContext context, ICurrentUser currentUser)
     {
         _context = context;
+        _currentUser = currentUser;
+    }
+
+    [HttpGet("manager")]
+    [Authorize(Roles = AppRoles.BranchManager)]
+    [ProducesResponseType(typeof(ManagerReportDto), StatusCodes.Status200OK)]
+    public async Task<ActionResult<ManagerReportDto>> GetManagerReport()
+    {
+        if (!_currentUser.BranchId.HasValue)
+        {
+            return StatusCode(StatusCodes.Status403Forbidden, new { message = "No branch assigned to this manager." });
+        }
+
+        var branch = await _context.Branches
+            .FirstOrDefaultAsync(item => item.Id == _currentUser.BranchId.Value && item.IsActive);
+        if (branch == null)
+        {
+            return StatusCode(StatusCodes.Status403Forbidden, new { message = "No branch assigned to this manager." });
+        }
+
+        return Ok(await BuildManagerReportAsync(branch));
+    }
+
+    [HttpGet("branch/operations")]
+    [Authorize(Roles = AppRoles.AdminRoles)]
+    [ProducesResponseType(typeof(BranchOperationsReportDto), StatusCodes.Status200OK)]
+    public async Task<ActionResult<BranchOperationsReportDto>> GetBranchOperationsReport()
+    {
+        var branchQuery = ApplyBranchScope(_context.Branches.AsQueryable());
+        var branch = await branchQuery.OrderBy(item => item.Name).FirstOrDefaultAsync();
+        if (branch == null)
+        {
+            return NotFound(new { message = "Assigned branch not found." });
+        }
+
+        var managerReport = await BuildManagerReportAsync(branch);
+        return Ok(new BranchOperationsReportDto
+        {
+            BranchId = managerReport.BranchId,
+            BranchName = managerReport.BranchName,
+            Capacity = managerReport.BranchCapacity,
+            UniqueMembersLoggedToday = managerReport.TotalMembersLoggedToday,
+            TotalCheckInEventsToday = managerReport.CheckInOutSummary.CheckIns,
+            ManualCheckOutsToday = managerReport.CheckInOutSummary.ManualCheckOuts,
+            AutoCheckOutsToday = managerReport.CheckInOutSummary.AutoCheckOuts,
+            CapacityByHour = managerReport.BranchCapacityByHour.Select(item => new BranchCapacityHourDto
+            {
+                Hour = item.Hour,
+                Label = item.Label,
+                ActivePeople = item.ActivePeopleCount,
+                UtilizationPercent = item.UtilizationPercent
+            }).ToList(),
+            RecentCheckIns = managerReport.TodayCheckIns.Select(item => new AdminAttendanceDto
+            {
+                Id = item.Id,
+                MemberId = item.MemberId,
+                BranchId = managerReport.BranchId,
+                MemberName = item.MemberName,
+                Status = item.Status,
+                At = item.CheckInTime?.ToLocalTime().ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture) ?? string.Empty,
+                CheckInTime = item.CheckInTime,
+                CheckOutTime = item.CheckOutTime,
+                Source = item.IsAutoCheckOut ? "Auto checkout" : "Attendance",
+                IsSuspicious = false,
+                SuspicionLevel = "none"
+            }).ToList()
+        });
+    }
+
+    private async Task<ManagerReportDto> BuildManagerReportAsync(Branch branch)
+    {
+        var todayStart = DateTime.UtcNow.Date;
+        var todayEnd = todayStart.AddDays(1);
+
+        var checkIns = await ApplyCheckInScope(_context.CheckIns
+                .Include(item => item.Member)
+                .AsQueryable())
+            .Where(item =>
+                item.BranchId == branch.Id &&
+                ((item.CheckInTime.HasValue && item.CheckInTime.Value < todayEnd) ||
+                 (item.CheckOutTime.HasValue && item.CheckOutTime.Value >= todayStart)))
+            .OrderByDescending(item => item.CheckInTime)
+            .ToListAsync();
+
+        var todayCheckIns = checkIns
+            .Where(item => item.CheckInTime >= todayStart && item.CheckInTime < todayEnd)
+            .ToList();
+        var todayCheckOuts = checkIns
+            .Where(item => item.CheckOutTime >= todayStart && item.CheckOutTime < todayEnd)
+            .ToList();
+
+        var capacityByHour = Enumerable.Range(0, 24)
+            .Select(hour =>
+            {
+                var hourStart = todayStart.AddHours(hour);
+                var hourEnd = hourStart.AddHours(1);
+                var activePeople = checkIns.Count(item =>
+                    item.CheckInTime.HasValue &&
+                    item.CheckInTime.Value <= hourEnd &&
+                    (!item.CheckOutTime.HasValue || item.CheckOutTime.Value >= hourStart));
+                return new HourlyBranchCapacityDto
+                {
+                    Hour = hour,
+                    Label = hourStart.ToString("HH:mm", CultureInfo.InvariantCulture),
+                    ActivePeopleCount = activePeople,
+                    BranchCapacity = branch.Capacity,
+                    UtilizationPercent = branch.Capacity.HasValue && branch.Capacity.Value > 0
+                        ? Math.Round((decimal)activePeople / branch.Capacity.Value * 100m, 1)
+                        : null
+                };
+            })
+            .ToList();
+
+        return new ManagerReportDto
+        {
+            BranchId = branch.Id,
+            BranchName = branch.Name,
+            BranchCapacity = branch.Capacity,
+            TotalMembersLoggedToday = todayCheckIns
+                .Where(item => item.MemberId.HasValue)
+                .Select(item => item.MemberId!.Value)
+                .Distinct()
+                .Count(),
+            BranchCapacityByHour = capacityByHour,
+            CheckInOutSummary = new CheckInOutSummaryDto
+            {
+                CheckIns = todayCheckIns.Count,
+                ManualCheckOuts = todayCheckOuts.Count(item => !IsAutoCheckOut(item)),
+                AutoCheckOuts = todayCheckOuts.Count(IsAutoCheckOut)
+            },
+            TodayCheckIns = todayCheckIns
+                .OrderByDescending(item => item.CheckInTime)
+                .Select(item => new CheckInUnderlyingRowDto
+                {
+                    Id = item.Id,
+                    MemberId = item.MemberId,
+                    MemberName = item.Member?.FullName ?? "Member",
+                    BranchName = branch.Name,
+                    CheckInTime = item.CheckInTime,
+                    CheckOutTime = item.CheckOutTime,
+                    IsAutoCheckOut = IsAutoCheckOut(item),
+                    Status = item.CheckOutTime.HasValue
+                        ? (IsAutoCheckOut(item) ? "Auto checked out" : "Checked out")
+                        : "Checked in"
+                })
+                .ToList()
+        };
     }
 
     [HttpGet("gym/{gymId:long}/summary")]
@@ -60,4 +211,119 @@ public class ReportsController : ControllerBase
 
         return Ok(response);
     }
+
+    private IQueryable<Branch> ApplyBranchScope(IQueryable<Branch> query)
+    {
+        if (_currentUser.IsInRole(AppRoles.SuperAdmin))
+        {
+            return query;
+        }
+
+        if (_currentUser.GymId.HasValue)
+        {
+            query = query.Where(item => item.GymId == _currentUser.GymId.Value);
+        }
+
+        if (_currentUser.BranchId.HasValue && !_currentUser.IsInRole(AppRoles.GymOwner))
+        {
+            query = query.Where(item => item.Id == _currentUser.BranchId.Value);
+        }
+
+        return query;
+    }
+
+    private IQueryable<CheckIn> ApplyCheckInScope(IQueryable<CheckIn> query)
+    {
+        if (_currentUser.IsInRole(AppRoles.SuperAdmin))
+        {
+            return query;
+        }
+
+        if (_currentUser.BranchId.HasValue && !_currentUser.IsInRole(AppRoles.GymOwner))
+        {
+            return query.Where(item => item.BranchId == _currentUser.BranchId.Value);
+        }
+
+        if (_currentUser.GymId.HasValue)
+        {
+            var branchIds = _context.Branches.Where(item => item.GymId == _currentUser.GymId.Value).Select(item => item.Id);
+            return query.Where(item => item.BranchId.HasValue && branchIds.Contains(item.BranchId.Value));
+        }
+
+        return query.Where(item => false);
+    }
+
+    private static AdminAttendanceDto ToAttendanceDto(CheckIn checkIn, IReadOnlyCollection<CheckIn> history)
+    {
+        var suspicion = DetectSuspicion(checkIn, history);
+        return new AdminAttendanceDto
+        {
+            Id = checkIn.Id,
+            MemberId = checkIn.MemberId,
+            BranchId = checkIn.BranchId,
+            MemberName = checkIn.Member?.FullName ?? "Member",
+            Type = "Member",
+            Status = checkIn.CheckOutTime.HasValue
+                ? (IsAutoCheckOut(checkIn) ? "Auto checked out" : "Checked out")
+                : "Checked in",
+            At = checkIn.CheckInTime?.ToLocalTime().ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture) ?? string.Empty,
+            CheckInTime = checkIn.CheckInTime,
+            CheckOutTime = checkIn.CheckOutTime,
+            Source = checkIn.CheckOutTime.HasValue
+                ? $"{checkIn.Method ?? "Front desk"} -> {checkIn.CheckOutMethod ?? "manual"}"
+                : checkIn.Method ?? "Front desk",
+            IsSuspicious = suspicion.IsSuspicious,
+            SuspicionReason = suspicion.Reason,
+            SuspicionLevel = suspicion.Level
+        };
+    }
+
+    private static (bool IsSuspicious, string Reason, string Level) DetectSuspicion(CheckIn checkIn, IReadOnlyCollection<CheckIn> history)
+    {
+        if (!checkIn.MemberId.HasValue || !checkIn.CheckInTime.HasValue)
+        {
+            return (false, string.Empty, "none");
+        }
+
+        var memberHistory = history
+            .Where(item => item.MemberId == checkIn.MemberId && item.CheckInTime.HasValue)
+            .OrderBy(item => item.CheckInTime)
+            .ToList();
+        var previous = memberHistory.LastOrDefault(item => item.CheckInTime < checkIn.CheckInTime);
+        if (previous != null && previous.CheckOutTime == null)
+        {
+            return (true, "Duplicate check-in", "high");
+        }
+
+        var checkInDay = checkIn.CheckInTime.Value.Date;
+        var todayCount = memberHistory.Count(item => item.CheckInTime?.Date == checkInDay);
+        var repeatedDailyPattern = memberHistory
+            .GroupBy(item => item.CheckInTime!.Value.Date)
+            .Count(group => group.Count() >= 2) >= 2;
+        if (todayCount >= 2 && repeatedDailyPattern)
+        {
+            return (true, "Repeated daily check-in pattern", "medium");
+        }
+
+        var completedDays = memberHistory
+            .Where(item => item.CheckInTime!.Value.Date < checkInDay)
+            .GroupBy(item => item.CheckInTime!.Value.Date)
+            .Select(group => group.Count())
+            .ToList();
+        if (completedDays.Count >= 5)
+        {
+            var average = completedDays.Average();
+            if (todayCount >= 3 && todayCount >= Math.Ceiling(average * 2d))
+            {
+                return (true, "Possible fraud", "medium");
+            }
+        }
+
+        return (false, string.Empty, "none");
+    }
+
+    private static bool IsAutoCheckOut(CheckIn checkIn) =>
+        string.Equals(AppStatuses.NormalizeCheckIn(checkIn.Status), AppStatuses.CheckInAutoCheckedOut, StringComparison.Ordinal) ||
+        (checkIn.CheckOutMethod?.Contains("auto", StringComparison.OrdinalIgnoreCase) == true) ||
+        (checkIn.CheckOutMethod?.Contains("geofence", StringComparison.OrdinalIgnoreCase) == true);
 }

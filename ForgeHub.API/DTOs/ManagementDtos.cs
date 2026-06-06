@@ -334,6 +334,69 @@ public class AdminAttendanceDto
     public DateTime? CheckInTime { get; set; }
     public DateTime? CheckOutTime { get; set; }
     public string Source { get; set; } = string.Empty;
+    public bool IsSuspicious { get; set; }
+    public string SuspicionReason { get; set; } = string.Empty;
+    public string SuspicionLevel { get; set; } = "none";
+}
+
+public class BranchOperationsReportDto
+{
+    public long? BranchId { get; set; }
+    public string BranchName { get; set; } = string.Empty;
+    public int? Capacity { get; set; }
+    public int UniqueMembersLoggedToday { get; set; }
+    public int TotalCheckInEventsToday { get; set; }
+    public int ManualCheckOutsToday { get; set; }
+    public int AutoCheckOutsToday { get; set; }
+    public List<BranchCapacityHourDto> CapacityByHour { get; set; } = [];
+    public List<AdminAttendanceDto> RecentCheckIns { get; set; } = [];
+}
+
+public class BranchCapacityHourDto
+{
+    public int Hour { get; set; }
+    public string Label { get; set; } = string.Empty;
+    public int ActivePeople { get; set; }
+    public decimal? UtilizationPercent { get; set; }
+}
+
+public class ManagerReportDto
+{
+    public long BranchId { get; set; }
+    public string BranchName { get; set; } = string.Empty;
+    public int? BranchCapacity { get; set; }
+    public int TotalMembersLoggedToday { get; set; }
+    public List<HourlyBranchCapacityDto> BranchCapacityByHour { get; set; } = [];
+    public CheckInOutSummaryDto CheckInOutSummary { get; set; } = new();
+    public List<CheckInUnderlyingRowDto> TodayCheckIns { get; set; } = [];
+}
+
+public class HourlyBranchCapacityDto
+{
+    public int Hour { get; set; }
+    public string Label { get; set; } = string.Empty;
+    public int ActivePeopleCount { get; set; }
+    public int? BranchCapacity { get; set; }
+    public decimal? UtilizationPercent { get; set; }
+}
+
+public class CheckInOutSummaryDto
+{
+    public int CheckIns { get; set; }
+    public int ManualCheckOuts { get; set; }
+    public int AutoCheckOuts { get; set; }
+}
+
+public class CheckInUnderlyingRowDto
+{
+    public long Id { get; set; }
+    public long? MemberId { get; set; }
+    public string MemberName { get; set; } = string.Empty;
+    public string BranchName { get; set; } = string.Empty;
+    public DateTime? CheckInTime { get; set; }
+    public DateTime? CheckOutTime { get; set; }
+    public bool IsAutoCheckOut { get; set; }
+    public string Status { get; set; } = string.Empty;
 }
 
 public class AdminNotificationDto

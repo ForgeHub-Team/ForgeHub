@@ -5,6 +5,7 @@ using ForgeHub.API.Models;
 using ForgeHub.API.Security;
 using ForgeHub.API.Services;
 using System.Security.Claims;
+using System.Globalization;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -32,7 +33,10 @@ public class CheckInsController : ControllerBase
     [HttpGet]
     public async Task<IActionResult> GetCheckIns([FromQuery] long? memberId, [FromQuery] long? branchId)
     {
-        var query = ApplyScope(_context.CheckIns.AsQueryable());
+        var query = ApplyScope(_context.CheckIns
+            .Include(c => c.Member)
+            .Include(c => c.Branch)
+            .AsQueryable());
 
         if (memberId.HasValue)
         {
@@ -44,8 +48,16 @@ public class CheckInsController : ControllerBase
             query = query.Where(c => c.BranchId == branchId.Value);
         }
 
-        var checkIns = await query.OrderByDescending(c => c.CheckInTime).ToListAsync();
-        return Ok(checkIns);
+        var checkIns = await query.OrderByDescending(c => c.CheckInTime).Take(200).ToListAsync();
+        var scopedMemberIds = checkIns.Where(item => item.MemberId.HasValue).Select(item => item.MemberId!.Value).Distinct().ToList();
+        var historyStart = DateTime.UtcNow.Date.AddDays(-30);
+        var history = await ApplyScope(_context.CheckIns.AsQueryable())
+            .Where(item => item.MemberId.HasValue && scopedMemberIds.Contains(item.MemberId.Value) && item.CheckInTime >= historyStart)
+            .OrderBy(item => item.MemberId)
+            .ThenBy(item => item.CheckInTime)
+            .ToListAsync();
+
+        return Ok(checkIns.Select(item => ToAttendanceDto(item, history)).ToList());
     }
 
     [HttpGet("active")]
@@ -365,4 +377,79 @@ public class CheckInsController : ControllerBase
 
         return false;
     }
+
+    private static AdminAttendanceDto ToAttendanceDto(CheckIn checkIn, IReadOnlyCollection<CheckIn> history)
+    {
+        var suspicion = DetectSuspicion(checkIn, history);
+        return new AdminAttendanceDto
+        {
+            Id = checkIn.Id,
+            MemberId = checkIn.MemberId,
+            BranchId = checkIn.BranchId,
+            MemberName = checkIn.Member?.FullName ?? "Member",
+            Type = "Member",
+            Status = checkIn.CheckOutTime.HasValue
+                ? (IsAutoCheckOut(checkIn) ? "Auto checked out" : "Checked out")
+                : "Checked in",
+            At = checkIn.CheckInTime?.ToLocalTime().ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture) ?? string.Empty,
+            CheckInTime = checkIn.CheckInTime,
+            CheckOutTime = checkIn.CheckOutTime,
+            Source = checkIn.CheckOutTime.HasValue
+                ? $"{checkIn.Method ?? "Front desk"} -> {checkIn.CheckOutMethod ?? "manual"}"
+                : checkIn.Method ?? "Front desk",
+            IsSuspicious = suspicion.IsSuspicious,
+            SuspicionReason = suspicion.Reason,
+            SuspicionLevel = suspicion.Level
+        };
+    }
+
+    private static (bool IsSuspicious, string Reason, string Level) DetectSuspicion(CheckIn checkIn, IReadOnlyCollection<CheckIn> history)
+    {
+        if (!checkIn.MemberId.HasValue || !checkIn.CheckInTime.HasValue)
+        {
+            return (false, string.Empty, "none");
+        }
+
+        var memberHistory = history
+            .Where(item => item.MemberId == checkIn.MemberId && item.CheckInTime.HasValue)
+            .OrderBy(item => item.CheckInTime)
+            .ToList();
+
+        var previous = memberHistory.LastOrDefault(item => item.CheckInTime < checkIn.CheckInTime);
+        if (previous != null && previous.CheckOutTime == null)
+        {
+            return (true, "Duplicate check-in", "high");
+        }
+
+        var checkInDay = checkIn.CheckInTime.Value.Date;
+        var todayCount = memberHistory.Count(item => item.CheckInTime?.Date == checkInDay);
+        var repeatedDailyPattern = memberHistory
+            .GroupBy(item => item.CheckInTime!.Value.Date)
+            .Count(group => group.Count() >= 2) >= 2;
+        if (todayCount >= 2 && repeatedDailyPattern)
+        {
+            return (true, "Repeated daily check-in pattern", "medium");
+        }
+
+        var completedDays = memberHistory
+            .Where(item => item.CheckInTime!.Value.Date < checkInDay)
+            .GroupBy(item => item.CheckInTime!.Value.Date)
+            .Select(group => group.Count())
+            .ToList();
+        if (completedDays.Count >= 5)
+        {
+            var average = completedDays.Average();
+            if (todayCount >= 3 && todayCount >= Math.Ceiling(average * 2d))
+            {
+                return (true, "Possible fraud", "medium");
+            }
+        }
+
+        return (false, string.Empty, "none");
+    }
+
+    private static bool IsAutoCheckOut(CheckIn checkIn) =>
+        string.Equals(AppStatuses.NormalizeCheckIn(checkIn.Status), AppStatuses.CheckInAutoCheckedOut, StringComparison.Ordinal) ||
+        (checkIn.CheckOutMethod?.Contains("auto", StringComparison.OrdinalIgnoreCase) == true) ||
+        (checkIn.CheckOutMethod?.Contains("geofence", StringComparison.OrdinalIgnoreCase) == true);
 }

@@ -121,6 +121,16 @@ public class PaymentsController : ControllerBase
             var member = request.MemberId.HasValue
                 ? await _context.Members.FirstOrDefaultAsync(item => item.Id == request.MemberId.Value)
                 : null;
+            if (request.MemberId.HasValue && member == null)
+            {
+                return NotFound(new { message = "Member not found." });
+            }
+
+            if (member != null && !CanAccessMember(member))
+            {
+                return Forbid();
+            }
+
             var scopedGymId = _currentUser.IsInRole(AppRoles.SuperAdmin) ? request.GymId : _currentUser.GymId;
             var scopedBranchId = _currentUser.IsInRole(AppRoles.GymOwner) || _currentUser.IsInRole(AppRoles.SuperAdmin)
                 ? request.BranchId ?? member?.HomeBranchId
@@ -189,5 +199,25 @@ public class PaymentsController : ControllerBase
         }
 
         return query;
+    }
+
+    private bool CanAccessMember(Member member)
+    {
+        if (_currentUser.IsInRole(AppRoles.SuperAdmin))
+        {
+            return true;
+        }
+
+        if (_currentUser.IsInRole(AppRoles.GymOwner))
+        {
+            return _currentUser.GymId.HasValue && member.GymId == _currentUser.GymId.Value;
+        }
+
+        if (_currentUser.IsInRole(AppRoles.BranchManager) || _currentUser.IsInRole(AppRoles.Staff))
+        {
+            return _currentUser.BranchId.HasValue && member.HomeBranchId == _currentUser.BranchId.Value;
+        }
+
+        return false;
     }
 }

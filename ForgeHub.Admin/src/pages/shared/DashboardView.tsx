@@ -248,28 +248,42 @@ function BranchManagerDashboard({ data }: { data: AdminWorkspace }) {
   const percent = branch ? branchCapacity(branch) : null;
   const status = capacityStatus(percent);
   const pendingPayments = countBy(data.members, (member) => statusIncludes(member.paymentStatus, "pending"));
+  const expired = countBy(data.members, isExpiredMembership);
+  const active = countBy(data.members, isActiveMembership);
   const renewalMembers = data.members.filter((member) => isExpiringWithin(member, 7) || isExpiredMembership(member));
   const todayClassRows = todayClasses(data);
   const todaysAttendance = data.attendance.filter((item) => isToday(item.checkInTime ?? item.at ?? null));
+  const monthPayments = monthlyPayments(data.payments);
+  const branchRows = branch ? [{
+    ...branch,
+    monthlyRevenue: amountTotal(monthPayments),
+    capacityPercent: percent === null ? "Capacity not configured" : formatPercent(percent),
+    capacityStatus: status.label
+  }] : [];
 
   return (
     <>
-      <PageHeader title="Branch Manager Dashboard" description="Assigned branch overview only, scoped by backend authorization and your branch claim." />
+      <PageHeader title="Branch Manager Dashboard" description="Branch-level business overview using backend-scoped members, payments, capacity, classes, and attendance." />
       <ContextBadge>Branch: {branch?.name ?? "Assigned branch"}</ContextBadge>
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <KpiCard label="Current Capacity" value={percent === null ? "Capacity not configured" : formatPercent(percent)} meta={status.label} />
+        <KpiCard label="Total Members" value={data.members.length} />
+        <KpiCard label="Active Memberships" value={active} />
+        <KpiCard label="Expired Memberships" value={expired} />
+        <KpiCard label="Monthly Revenue" value={money(amountTotal(monthPayments))} />
         <KpiCard label="Today Check-ins" value={todaysAttendance.length} />
-        <KpiCard label="Active Members in Branch" value={countBy(data.members, isActiveMembership)} />
+        <KpiCard label="Current Capacity" value={percent === null ? "Capacity not configured" : formatPercent(percent)} meta={status.label} />
         <KpiCard label="Classes Today" value={todayClassRows.length} />
         <KpiCard label="Pending Payments" value={pendingPayments} />
-        <KpiCard label="Failed QR/Attendance Attempts" value="Not available" meta="TODO: expose failed attendance attempts from backend." />
-        <KpiCard label="Expiring Memberships This Week" value={renewalMembers.length} />
       </div>
       <div className="mt-6 grid gap-6 xl:grid-cols-2">
+        <Section title="Branch Capacity Overview"><BranchPerformanceChart branches={data.branches} /></Section>
+        <RecentMembers title="Branch Members Needing Renewal" members={renewalMembers} />
         <DataTable title="Recent Check-ins" rows={data.attendance.slice(0, 10)} columns={[{ key: "memberName", label: "Member" }, { key: "status", label: "Status", badge: true }, { key: "at", label: "Time" }, { key: "source", label: "Source" }]} />
         <DataTable title="Today's Classes" rows={todayClassRows.slice(0, 10)} columns={[{ key: "name", label: "Class" }, { key: "trainerName", label: "Trainer" }, { key: "time", label: "Time" }, { key: "status", label: "Status", badge: true }]} />
-        <RecentMembers title="Branch Members Needing Renewal" members={renewalMembers} />
         <Section title="Branch Alerts">{pendingPayments || renewalMembers.length ? <div className="space-y-3 text-sm text-forge-muted"><p><AlertTriangle className="mr-2 inline" size={16} />Review pending payments and renewals before closing.</p><Badge tone={status.tone}>{status.label}</Badge></div> : <EmptyState title="No branch alerts." />}</Section>
+      </div>
+      <div className="mt-6">
+        <DataTable title="Branch Performance" rows={branchRows} columns={[{ key: "name", label: "Branch Name" }, { key: "members", label: "Members" }, { key: "activeToday", label: "Today Check-ins" }, { key: "capacityPercent", label: "Capacity %" }, { key: "monthlyRevenue", label: "Monthly Revenue", render: (row) => money(row.monthlyRevenue) }, { key: "capacityStatus", label: "Status", badge: true }]} />
       </div>
     </>
   );

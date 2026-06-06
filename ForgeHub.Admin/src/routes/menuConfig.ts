@@ -53,8 +53,7 @@ export const menuByRole: Record<Role, MenuItem[]> = {
     { label: "Check-ins", path: "/branch-manager/check-ins", icon: Activity },
     { label: "Branch QR", path: "/branch-manager/branch-qr", icon: FileText },
     { label: "Classes", path: "/branch-manager/classes", icon: CalendarDays },
-    { label: "Staff", path: "/branch-manager/staff", icon: Users },
-    { label: "Trainers", path: "/branch-manager/trainers", icon: Dumbbell },
+    { label: "Team", path: "/branch-manager/staff", icon: Users },
     { label: "Payments", path: "/branch-manager/payments", icon: CreditCard },
     { label: "Notifications", path: "/branch-manager/notifications", icon: Bell },
     { label: "Reports", path: "/branch-manager/reports", icon: BarChart3 }

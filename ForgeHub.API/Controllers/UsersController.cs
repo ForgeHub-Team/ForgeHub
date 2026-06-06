@@ -188,7 +188,7 @@ public class UsersController : ControllerBase
     }
 
     [HttpDelete("{id:long}")]
-    [Authorize(Roles = AppRoles.OwnerRoles)]
+    [Authorize(Roles = AppRoles.AdminRoles)]
     public async Task<IActionResult> DeleteUser(long id)
     {
         try
@@ -216,7 +216,7 @@ public class UsersController : ControllerBase
     }
 
     [HttpPatch("{id:long}/status")]
-    [Authorize(Roles = AppRoles.OwnerRoles)]
+    [Authorize(Roles = AppRoles.AdminRoles)]
     public async Task<IActionResult> UpdateStatus(long id, [FromBody] UpdateStatusRequest request)
     {
         var user = await ApplyScope(_context.Users.AsQueryable()).FirstOrDefaultAsync(item => item.Id == id);
