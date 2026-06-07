@@ -1,8 +1,9 @@
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { AlertTriangle, FileText } from "lucide-react";
 import { QRCodeCanvas } from "qrcode.react";
 import { useLocation } from "react-router-dom";
 import { branchesApi } from "../../api/branchesApi";
+import { gymsApi } from "../../api/gymsApi";
 import { qrApi } from "../../api/qrApi";
 import { useAuth } from "../../hooks/useAuth";
 import { Button } from "../../components/ui/Button";
@@ -20,15 +21,23 @@ export function BranchQrPage() {
   const { session } = useAuth();
   const printableRef = useRef<HTMLDivElement>(null);
   const routeBranchId = location.pathname.match(/\/branches\/(\d+)\/qr/)?.[1];
+  const isSuperAdmin = session?.user.role === "SuperAdmin";
   const canSelectBranch = session?.user.role === "SuperAdmin" || session?.user.role === "GymOwner";
-  const branches = useApi(() => canSelectBranch ? branchesApi.getBranches() : Promise.resolve([]), [canSelectBranch]);
+  const [selectedGymId, setSelectedGymId] = useState<number | null>(null);
+  const gyms = useApi(() => isSuperAdmin ? gymsApi.getGyms() : Promise.resolve([]), [isSuperAdmin]);
+  const branches = useApi(() => {
+    if (!canSelectBranch) return Promise.resolve([]);
+    if (isSuperAdmin && !selectedGymId) return Promise.resolve([]);
+    return branchesApi.getBranches(isSuperAdmin ? { gymId: selectedGymId } : undefined);
+  }, [canSelectBranch, isSuperAdmin, selectedGymId]);
   const [selectedBranchId, setSelectedBranchId] = useState<number | null>(null);
-  const firstBranchId = branches.data?.[0]?.id;
+  const firstBranchId = !isSuperAdmin ? branches.data?.[0]?.id : undefined;
   const resolvedBranchId = Number(routeBranchId ?? selectedBranchId ?? session?.user.branchId ?? firstBranchId);
   const canRegenerate = ["SuperAdmin", "GymOwner", "BranchManager"].includes(session?.user.role ?? "");
   const [confirmRegenerate, setConfirmRegenerate] = useState(false);
   const [notice, setNotice] = useState("");
   const qr = useApi(() => Number.isFinite(resolvedBranchId) && resolvedBranchId > 0 ? qrApi.getBranchQr(resolvedBranchId) : Promise.resolve(null), [resolvedBranchId]);
+  const selectedGymBranches = useMemo(() => branches.data ?? [], [branches.data]);
 
   async function regenerate() {
     await qrApi.regenerateBranchQr(resolvedBranchId);
@@ -111,14 +120,55 @@ export function BranchQrPage() {
     link.click();
   }
 
-  if (branches.loading) return <LoadingState />;
+  if (gyms.loading || branches.loading) return <LoadingState />;
+  if (gyms.error) return <ErrorState message={gyms.error} />;
   if (branches.error) return <ErrorState message={branches.error} />;
-  if (canSelectBranch && branches.data?.length === 0) {
-    return <EmptyState title="No branches" message="Create a branch before generating branch QR codes." />;
-  }
+
+  const filters = canSelectBranch ? (
+    <Card className="no-print mb-4 max-w-3xl">
+      <div className="grid gap-3 md:grid-cols-2">
+        {isSuperAdmin ? (
+          <label className="grid gap-2 text-sm font-bold text-slate-700">
+            Gym
+            <Select value={selectedGymId ?? ""} onChange={(event) => {
+              setSelectedGymId(event.target.value ? Number(event.target.value) : null);
+              setSelectedBranchId(null);
+            }}>
+              <option value="">Select a gym</option>
+              {gyms.data?.map((gym) => <option key={gym.id} value={gym.id}>{gym.name}</option>)}
+            </Select>
+          </label>
+        ) : null}
+        <label className="grid gap-2 text-sm font-bold text-slate-700">
+          Branch
+          <Select
+            value={Number.isFinite(resolvedBranchId) && resolvedBranchId > 0 ? resolvedBranchId : ""}
+            disabled={isSuperAdmin && !selectedGymId}
+            onChange={(event) => setSelectedBranchId(event.target.value ? Number(event.target.value) : null)}
+          >
+            <option value="">{isSuperAdmin && !selectedGymId ? "Select a gym first" : "Select a branch"}</option>
+            {selectedGymBranches.map((branch) => (
+              <option key={branch.id} value={branch.id}>{branch.name} #{branch.id}</option>
+            ))}
+          </Select>
+        </label>
+      </div>
+    </Card>
+  ) : null;
 
   if (!Number.isFinite(resolvedBranchId) || resolvedBranchId <= 0) {
-    return <ErrorState message="No branch is assigned to this user." />;
+    return (
+      <>
+        <div className="no-print">
+          <PageHeader
+            title="Branch QR Codes"
+            description="Static branch QR for member check-in. Regenerate only if the printed QR is compromised."
+          />
+        </div>
+        {filters}
+        <EmptyState title={isSuperAdmin ? "Select a gym and branch" : "No branch selected"} message={isSuperAdmin ? "Choose a gym first, then select one of its branches to view the QR code." : "No branch is assigned to this user."} />
+      </>
+    );
   }
 
   if (qr.loading) return <LoadingState />;
@@ -134,18 +184,7 @@ export function BranchQrPage() {
         />
       </div>
       {notice ? <div className="no-print mb-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm font-semibold text-amber-800">{notice}</div> : null}
-      {canSelectBranch && branches.data && branches.data.length > 1 ? (
-        <Card className="no-print mb-4 max-w-xl">
-          <label className="grid gap-2 text-sm font-bold text-slate-700">
-            Branch
-            <Select value={resolvedBranchId} onChange={(event) => setSelectedBranchId(Number(event.target.value))}>
-              {branches.data.map((branch) => (
-                <option key={branch.id} value={branch.id}>{branch.name} #{branch.id}</option>
-              ))}
-            </Select>
-          </label>
-        </Card>
-      ) : null}
+      {filters}
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
         <Card className="no-print qr-web-preview bg-white">
           <div className="mx-auto flex max-w-3xl flex-col items-center justify-center gap-5 px-4 py-6 text-center">

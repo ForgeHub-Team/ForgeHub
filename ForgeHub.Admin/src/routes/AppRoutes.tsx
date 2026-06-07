@@ -5,7 +5,6 @@ import { AdminLayout } from "../layouts/AdminLayout";
 import { LoginPage } from "../pages/auth/LoginPage";
 import { ForgotPasswordPage } from "../pages/auth/ForgotPasswordPage";
 import { AuditLogsPage } from "../pages/superadmin/AuditLogsPage";
-import { GymOwnersPage } from "../pages/superadmin/GymOwnersPage";
 import { GymsPage } from "../pages/superadmin/GymsPage";
 import { PlatformReportsPage } from "../pages/superadmin/PlatformReportsPage";
 import { PlatformUsersPage } from "../pages/superadmin/PlatformUsersPage";
@@ -67,7 +66,7 @@ export function AppRoutes() {
           <Route element={<RoleGuard allowed={["SuperAdmin"]} />}>
             <Route path="/superadmin/dashboard" element={<SuperAdminDashboard />} />
             <Route path="/superadmin/gyms" element={<GymsPage />} />
-            <Route path="/superadmin/gym-owners" element={<GymOwnersPage />} />
+            <Route path="/superadmin/gym-owners" element={<Navigate to="/superadmin/gyms" replace />} />
             <Route path="/superadmin/platform-users" element={<PlatformUsersPage />} />
             <Route path="/superadmin/branch-qr" element={<BranchQrPage />} />
             <Route path="/superadmin/reports" element={<PlatformReportsPage />} />

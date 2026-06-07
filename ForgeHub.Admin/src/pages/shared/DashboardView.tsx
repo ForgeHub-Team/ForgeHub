@@ -191,9 +191,6 @@ function SuperAdminDashboard({ data }: { data: AdminWorkspace }) {
         <DataTable title="Gyms Needing Attention" rows={data.gyms.filter((gym) => !statusIncludes(gym.status, "active") || gym.branches === 0)} columns={[{ key: "name", label: "Gym" }, { key: "branches", label: "Branches" }, { key: "members", label: "Members" }, { key: "status", label: "Status", badge: true }]} />
         <DataTable title="Branches Missing Location/Capacity Data" rows={missingBranchData} columns={[{ key: "name", label: "Branch" }, { key: "address", label: "Location" }, { key: "capacity", label: "Capacity" }, { key: "rangeKm", label: "Geofence" }, { key: "status", label: "Status", badge: true }]} />
       </div>
-      <div className="mt-6">
-        {data.systemLogs?.length ? <DataTable title="Recent Platform Activity" rows={data.systemLogs.slice(0, 8) as Array<{ id: number; event: string; actor: string; target: string; time: string }>} columns={[{ key: "event", label: "Event" }, { key: "actor", label: "Actor" }, { key: "target", label: "Target" }, { key: "time", label: "Time" }]} /> : <EmptyState title="No platform activity available." />}
-      </div>
     </>
   );
 }

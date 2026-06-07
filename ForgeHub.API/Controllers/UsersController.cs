@@ -149,6 +149,11 @@ public class UsersController : ControllerBase
                 return Forbid();
             }
 
+            if (await WouldRemoveLastActiveSuperAdminAsync(user, requestedRole.Name, request.IsActive))
+            {
+                return BadRequest(new { message = "At least one active Super Admin must remain." });
+            }
+
             var emailInUse = await _context.Users.AnyAsync(u => u.Email == request.Email && u.Id != id);
             if (emailInUse)
             {
@@ -230,10 +235,24 @@ public class UsersController : ControllerBase
             return Forbid();
         }
 
+        var roleName = await _context.Roles
+            .Where(role => role.Id == user.RoleId)
+            .Select(role => role.Name)
+            .FirstOrDefaultAsync();
+
+        if (await WouldRemoveLastActiveSuperAdminAsync(user, roleName, request.IsActive))
+        {
+            return BadRequest(new { message = "At least one active Super Admin must remain." });
+        }
+
         user.IsActive = request.IsActive;
         AddAudit(request.IsActive ? "USER_REACTIVATED" : "USER_DEACTIVATED", "users", user.Id);
         await _context.SaveChangesAsync();
-        return Ok(user);
+
+        var gyms = await _context.Gyms.ToListAsync();
+        var branches = await _context.Branches.ToListAsync();
+        user.Role = await _context.Roles.FirstOrDefaultAsync(role => role.Id == user.RoleId);
+        return Ok(ToAdminUser(user, gyms, branches));
     }
 
     private IQueryable<User> ApplyScope(IQueryable<User> query)
@@ -344,6 +363,34 @@ public class UsersController : ControllerBase
         }
 
         return true;
+    }
+
+    private async Task<bool> WouldRemoveLastActiveSuperAdminAsync(User target, string? nextRoleName, bool nextIsActive)
+    {
+        var currentRoleName = await _context.Roles
+            .Where(role => role.Id == target.RoleId)
+            .Select(role => role.Name)
+            .FirstOrDefaultAsync();
+
+        if (!string.Equals(currentRoleName, AppRoles.SuperAdmin, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        if (nextIsActive && string.Equals(nextRoleName, AppRoles.SuperAdmin, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        var superAdminRoleIds = await _context.Roles
+            .Where(role => role.Name == AppRoles.SuperAdmin)
+            .Select(role => role.Id)
+            .ToListAsync();
+
+        return !await _context.Users.AnyAsync(user =>
+            user.Id != target.Id &&
+            user.IsActive &&
+            superAdminRoleIds.Contains(user.RoleId));
     }
 
     private void AddAudit(string action, string tableName, long recordId)

@@ -52,6 +52,12 @@ public class UpdateGymRequest : CreateGymRequest
 {
 }
 
+public class LinkGymOwnerRequest
+{
+    [Required]
+    public long UserId { get; set; }
+}
+
 public class UploadGymLogoRequest
 {
     [Required]

@@ -29,8 +29,20 @@ public class GymsController : ControllerBase
         var gyms = await ApplyScope(_context.Gyms.AsQueryable())
             .OrderBy(g => g.Name)
             .ToListAsync();
+        var gymIds = gyms.Select(gym => gym.Id).ToList();
         var owners = await GetOwnerCandidatesAsync();
-        return Ok(gyms.Select(gym => ToGymResponse(gym, owners)).ToList());
+        var branchCounts = await _context.Branches
+            .Where(branch => branch.GymId.HasValue && gymIds.Contains(branch.GymId.Value))
+            .GroupBy(branch => branch.GymId!.Value)
+            .Select(group => new { GymId = group.Key, Count = group.Count() })
+            .ToDictionaryAsync(item => item.GymId, item => item.Count);
+        var subscriptions = await _context.GymSubscriptions
+            .Where(subscription => subscription.GymId.HasValue && gymIds.Contains(subscription.GymId.Value))
+            .OrderByDescending(subscription => subscription.DueDate)
+            .ThenByDescending(subscription => subscription.Id)
+            .ToListAsync();
+
+        return Ok(gyms.Select(gym => ToGymResponse(gym, owners, branchCounts, subscriptions)).ToList());
     }
 
     [HttpGet("{id:long}")]
@@ -42,7 +54,7 @@ public class GymsController : ControllerBase
             return NotFound();
         }
 
-        return Ok(ToGymResponse(gym, await GetOwnerCandidatesAsync()));
+        return Ok(ToGymResponse(gym, await GetOwnerCandidatesAsync(), await GetBranchCountsAsync([gym.Id]), await GetSubscriptionsAsync([gym.Id])));
     }
 
     [HttpPost]
@@ -63,7 +75,7 @@ public class GymsController : ControllerBase
 
             _context.Gyms.Add(gym);
             await _context.SaveChangesAsync();
-            return CreatedAtAction(nameof(GetGym), new { id = gym.Id }, ToGymResponse(gym, await GetOwnerCandidatesAsync()));
+            return CreatedAtAction(nameof(GetGym), new { id = gym.Id }, ToGymResponse(gym, await GetOwnerCandidatesAsync(), await GetBranchCountsAsync([gym.Id]), await GetSubscriptionsAsync([gym.Id])));
         }
         catch (Exception ex)
         {
@@ -90,7 +102,7 @@ public class GymsController : ControllerBase
             gym.IsActive = request.IsActive;
 
             await _context.SaveChangesAsync();
-            return Ok(ToGymResponse(gym, await GetOwnerCandidatesAsync()));
+            return Ok(ToGymResponse(gym, await GetOwnerCandidatesAsync(), await GetBranchCountsAsync([gym.Id]), await GetSubscriptionsAsync([gym.Id])));
         }
         catch (Exception ex)
         {
@@ -110,7 +122,54 @@ public class GymsController : ControllerBase
 
         gym.IsActive = request.IsActive;
         await _context.SaveChangesAsync();
-        return Ok(ToGymResponse(gym, await GetOwnerCandidatesAsync()));
+        return Ok(ToGymResponse(gym, await GetOwnerCandidatesAsync(), await GetBranchCountsAsync([gym.Id]), await GetSubscriptionsAsync([gym.Id])));
+    }
+
+    [HttpPost("{id:long}/owners")]
+    [Authorize(Roles = AppRoles.SuperAdmin)]
+    public async Task<IActionResult> LinkOwner(long id, [FromBody] LinkGymOwnerRequest request)
+    {
+        var gym = await ApplyScope(_context.Gyms.AsQueryable()).FirstOrDefaultAsync(item => item.Id == id);
+        if (gym == null)
+        {
+            return NotFound(new { message = "Gym not found." });
+        }
+
+        var ownerRoleId = await _context.Roles
+            .Where(role => role.Name == AppRoles.GymOwner)
+            .Select(role => role.Id)
+            .FirstOrDefaultAsync();
+
+        var owner = await _context.Users.FirstOrDefaultAsync(user => user.Id == request.UserId);
+        if (owner == null)
+        {
+            return NotFound(new { message = "Owner user not found." });
+        }
+
+        if (owner.RoleId != ownerRoleId)
+        {
+            return BadRequest(new { message = "Only users with the Gym Owner role can be linked as gym owners." });
+        }
+
+        if (owner.GymId.HasValue && owner.GymId.Value != gym.Id)
+        {
+            return BadRequest(new { message = "This owner is already linked to another gym." });
+        }
+
+        if (owner.GymId == gym.Id)
+        {
+            return Ok(ToGymResponse(gym, await GetOwnerCandidatesAsync(), await GetBranchCountsAsync([gym.Id]), await GetSubscriptionsAsync([gym.Id])));
+        }
+
+        owner.GymId = gym.Id;
+        owner.BranchId = null;
+        if (!gym.OwnerUserId.HasValue)
+        {
+            gym.OwnerUserId = owner.Id;
+        }
+
+        await _context.SaveChangesAsync();
+        return Ok(ToGymResponse(gym, await GetOwnerCandidatesAsync(), await GetBranchCountsAsync([gym.Id]), await GetSubscriptionsAsync([gym.Id])));
     }
 
     [HttpPost("upload-logo")]
@@ -207,23 +266,72 @@ public class GymsController : ControllerBase
             .ToListAsync();
     }
 
-    private static GymResponse ToGymResponse(Gym gym, IReadOnlyCollection<User> owners)
+    private async Task<Dictionary<long, int>> GetBranchCountsAsync(IReadOnlyCollection<long> gymIds)
     {
+        return await _context.Branches
+            .Where(branch => branch.GymId.HasValue && gymIds.Contains(branch.GymId.Value))
+            .GroupBy(branch => branch.GymId!.Value)
+            .Select(group => new { GymId = group.Key, Count = group.Count() })
+            .ToDictionaryAsync(item => item.GymId, item => item.Count);
+    }
+
+    private async Task<List<GymSubscription>> GetSubscriptionsAsync(IReadOnlyCollection<long> gymIds)
+    {
+        return await _context.GymSubscriptions
+            .Where(subscription => subscription.GymId.HasValue && gymIds.Contains(subscription.GymId.Value))
+            .OrderByDescending(subscription => subscription.DueDate)
+            .ThenByDescending(subscription => subscription.Id)
+            .ToListAsync();
+    }
+
+    private static GymResponse ToGymResponse(
+        Gym gym,
+        IReadOnlyCollection<User> owners,
+        IReadOnlyDictionary<long, int> branchCounts,
+        IReadOnlyCollection<GymSubscription> subscriptions)
+    {
+        var linkedOwners = owners
+            .Where(user => user.GymId == gym.Id || (gym.OwnerUserId.HasValue && user.Id == gym.OwnerUserId.Value))
+            .GroupBy(user => user.Id)
+            .Select(group => group.First())
+            .OrderBy(user => user.FullName)
+            .ToList();
         var owner = gym.OwnerUserId.HasValue
-            ? owners.FirstOrDefault(user => user.Id == gym.OwnerUserId.Value)
-            : owners.FirstOrDefault(user => user.GymId == gym.Id);
+            ? linkedOwners.FirstOrDefault(user => user.Id == gym.OwnerUserId.Value)
+            : linkedOwners.FirstOrDefault();
+        var subscription = subscriptions.FirstOrDefault(item => item.GymId == gym.Id);
 
         return new GymResponse
         {
             Id = gym.Id,
             Name = gym.Name,
             OwnerUserId = gym.OwnerUserId ?? owner?.Id,
-            OwnerName = string.IsNullOrWhiteSpace(owner?.FullName) ? "Not assigned" : owner.FullName,
+            OwnerName = linkedOwners.Count == 0 ? "No owners assigned" : string.Join(", ", linkedOwners.Select(item => string.IsNullOrWhiteSpace(item.FullName) ? item.Email : item.FullName)),
+            Owners = linkedOwners.Select(ToGymOwnerResponse).ToList(),
+            OwnerCount = linkedOwners.Count,
+            OwnerEmails = linkedOwners.Select(item => item.Email ?? string.Empty).Where(item => !string.IsNullOrWhiteSpace(item)).ToList(),
+            OwnerPhones = linkedOwners.Select(item => item.Phone ?? string.Empty).Where(item => !string.IsNullOrWhiteSpace(item)).ToList(),
             LogoUrl = gym.LogoUrl,
             City = gym.City,
             IsActive = gym.IsActive,
             Status = gym.IsActive ? "Active" : "Inactive",
-            CreatedAt = gym.CreatedAt
+            CreatedAt = gym.CreatedAt,
+            Branches = branchCounts.TryGetValue(gym.Id, out var count) ? count : 0,
+            SubscriptionStatus = subscription?.Status,
+            SubscriptionPlan = subscription?.PlanName,
+            SubscriptionDueDate = subscription?.DueDate
+        };
+    }
+
+    private static GymOwnerResponse ToGymOwnerResponse(User owner)
+    {
+        return new GymOwnerResponse
+        {
+            Id = owner.Id,
+            Name = owner.FullName ?? string.Empty,
+            Email = owner.Email ?? string.Empty,
+            Phone = owner.Phone,
+            IsActive = owner.IsActive
         };
     }
 
@@ -233,10 +341,27 @@ public class GymsController : ControllerBase
         public string Name { get; set; } = string.Empty;
         public long? OwnerUserId { get; set; }
         public string OwnerName { get; set; } = "Not assigned";
+        public List<GymOwnerResponse> Owners { get; set; } = [];
+        public int OwnerCount { get; set; }
+        public List<string> OwnerEmails { get; set; } = [];
+        public List<string> OwnerPhones { get; set; } = [];
         public string? LogoUrl { get; set; }
         public string? City { get; set; }
         public bool IsActive { get; set; }
         public string Status { get; set; } = "Inactive";
         public DateTime? CreatedAt { get; set; }
+        public int Branches { get; set; }
+        public string? SubscriptionStatus { get; set; }
+        public string? SubscriptionPlan { get; set; }
+        public DateOnly? SubscriptionDueDate { get; set; }
+    }
+
+    private sealed class GymOwnerResponse
+    {
+        public long Id { get; set; }
+        public string Name { get; set; } = string.Empty;
+        public string Email { get; set; } = string.Empty;
+        public string? Phone { get; set; }
+        public bool IsActive { get; set; }
     }
 }

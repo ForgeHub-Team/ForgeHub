@@ -1,4 +1,4 @@
-import { del, get, post, postForm, put } from "./apiClient";
+import { del, get, patch, post, postForm, put } from "./apiClient";
 import type { Gym } from "../types/gym";
 
 export const gymsApi = {
@@ -6,8 +6,9 @@ export const gymsApi = {
   getGymById: (id: number) => get<Gym>(`/gyms/${id}`),
   createGym: (data: Partial<Gym>) => post<Gym>("/gyms", data),
   updateGym: (id: number, data: Partial<Gym>) => put<Gym>(`/gyms/${id}`, data),
-  activateGym: (gym: Gym) => put<Gym>(`/gyms/${gym.id}`, { name: gym.name, city: gym.city, ownerUserId: gym.ownerUserId, logoUrl: gym.logoUrl, isActive: true }),
-  deactivateGym: (gym: Gym) => put<Gym>(`/gyms/${gym.id}`, { name: gym.name, city: gym.city, ownerUserId: gym.ownerUserId, logoUrl: gym.logoUrl, isActive: false }),
+  activateGym: (gym: Gym) => patch<Gym>(`/gyms/${gym.id}/status`, { isActive: true }),
+  deactivateGym: (gym: Gym) => patch<Gym>(`/gyms/${gym.id}/status`, { isActive: false }),
+  linkOwner: (gymId: number, userId: number) => post<Gym>(`/gyms/${gymId}/owners`, { userId }),
   uploadLogo: (file: File) => {
     const data = new FormData();
     data.append("file", file);

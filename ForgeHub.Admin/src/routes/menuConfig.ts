@@ -26,8 +26,7 @@ export interface MenuItem {
 export const menuByRole: Record<Role, MenuItem[]> = {
   SuperAdmin: [
     { label: "Dashboard", path: "/superadmin/dashboard", icon: Home },
-    { label: "Gyms", path: "/superadmin/gyms", icon: Building2 },
-    { label: "Gym Owners", path: "/superadmin/gym-owners", icon: Shield },
+    { label: "Gyms & Owners", path: "/superadmin/gyms", icon: Building2 },
     { label: "Platform Users", path: "/superadmin/platform-users", icon: Users },
     { label: "QR Codes", path: "/superadmin/branch-qr", icon: FileText },
     { label: "Reports", path: "/superadmin/reports", icon: BarChart3 },
