@@ -25,6 +25,36 @@ interface BackendRefreshResponse {
   user?: Partial<AuthUser>;
 }
 
+interface BackendErrorResponse {
+  message?: string;
+  title?: string;
+  errors?: Record<string, string[] | string>;
+}
+
+function redactPayload(value: unknown): unknown {
+  if (!value || typeof value !== "object") return value;
+  if (Array.isArray(value)) return value.map(redactPayload);
+  return Object.fromEntries(Object.entries(value as Record<string, unknown>).map(([key, item]) => {
+    const lower = key.toLowerCase();
+    if (lower.includes("password") || lower.includes("token")) return [key, "[redacted]"];
+    return [key, redactPayload(item)];
+  }));
+}
+
+function formatBackendError(payload: BackendErrorResponse, fallback: string) {
+  const validationMessages = Object.entries(payload.errors ?? {})
+    .flatMap(([field, messages]) => {
+      const text = Array.isArray(messages) ? messages.join(" ") : messages;
+      return text ? [`${field}: ${text}`] : [];
+    });
+
+  if (validationMessages.length > 0) {
+    return validationMessages.join(" ");
+  }
+
+  return payload.message ?? payload.title ?? fallback;
+}
+
 function mapRefresh(response: BackendRefreshResponse, previous: AuthSession): AuthSession {
   const source = response.user ?? {};
   return {
@@ -99,12 +129,21 @@ async function request<T>(method: string, path: string, data?: unknown, params?:
         : response.status >= 500
           ? "The backend API returned a server error."
           : `Request failed with status ${response.status}`;
+    let responseBody = "";
     try {
-      const payload = await response.json() as { message?: string; title?: string };
-      message = payload.message ?? payload.title ?? message;
+      responseBody = await response.text();
+      const payload = responseBody ? JSON.parse(responseBody) as BackendErrorResponse : {};
+      message = formatBackendError(payload, message);
     } catch {
       // Keep status message.
     }
+    console.error("ForgeHub API request failed", {
+      endpoint: path,
+      method,
+      payload: redactPayload(data),
+      status: response.status,
+      responseBody
+    });
     throw new Error(message);
   }
   if (response.status === 204) return undefined as T;

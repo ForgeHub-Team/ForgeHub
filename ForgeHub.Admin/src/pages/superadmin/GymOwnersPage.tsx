@@ -27,7 +27,7 @@ export function GymOwnersPage() {
           }}
         />
       )}
-      editForm={(row, close, _reload, notify, updateRow, refresh) => (
+      editForm={(row, close, _reload, notify, _notifyError, updateRow, refresh) => (
         <UserForm
           fixedRoleId={roleIds.GymOwner}
           requirePassword={false}

@@ -61,11 +61,18 @@ public class BranchesController : ControllerBase
                 return BadRequest(new { message = "Invalid branch data." });
             }
 
-            var gymId = _currentUser.IsInRole(AppRoles.SuperAdmin) ? request.GymId : _currentUser.GymId;
+            var gymId = _currentUser.IsInRole(AppRoles.SuperAdmin)
+                ? request.GymId
+                : await ResolveOwnedGymIdAsync(request.GymId);
+            if (!_currentUser.IsInRole(AppRoles.SuperAdmin) && !gymId.HasValue)
+            {
+                return BadRequest(new { message = "Select one of your gyms before creating a branch." });
+            }
 
             if (gymId.HasValue)
             {
-                var gymExists = await _context.Gyms.AnyAsync(g => g.Id == gymId.Value);
+                var gymExists = await _context.Gyms.AnyAsync(g => g.Id == gymId.Value &&
+                    (_currentUser.IsInRole(AppRoles.SuperAdmin) || g.OwnerUserId == _currentUser.UserId || (_currentUser.GymId.HasValue && g.Id == _currentUser.GymId.Value)));
                 if (!gymExists)
                 {
                     return BadRequest(new { message = "Gym not found." });
@@ -123,7 +130,8 @@ public class BranchesController : ControllerBase
 
             if (gymId.HasValue)
             {
-                var gymExists = await _context.Gyms.AnyAsync(g => g.Id == gymId.Value);
+                var gymExists = await _context.Gyms.AnyAsync(g => g.Id == gymId.Value &&
+                    (_currentUser.IsInRole(AppRoles.SuperAdmin) || g.OwnerUserId == _currentUser.UserId || (_currentUser.GymId.HasValue && g.Id == _currentUser.GymId.Value)));
                 if (!gymExists)
                 {
                     return BadRequest(new { message = "Gym not found." });
@@ -162,6 +170,14 @@ public class BranchesController : ControllerBase
             return query;
         }
 
+        if (_currentUser.IsInRole(AppRoles.GymOwner))
+        {
+            var ownedGymIds = _context.Gyms
+                .Where(gym => gym.OwnerUserId == _currentUser.UserId || (_currentUser.GymId.HasValue && gym.Id == _currentUser.GymId.Value))
+                .Select(gym => gym.Id);
+            return query.Where(item => item.GymId.HasValue && ownedGymIds.Contains(item.GymId.Value));
+        }
+
         if (_currentUser.GymId.HasValue)
         {
             query = query.Where(item => item.GymId == _currentUser.GymId.Value);
@@ -174,5 +190,30 @@ public class BranchesController : ControllerBase
         }
 
         return query;
+    }
+
+    private async Task<long?> ResolveOwnedGymIdAsync(long? requestedGymId)
+    {
+        if (!_currentUser.IsInRole(AppRoles.GymOwner))
+        {
+            return _currentUser.GymId;
+        }
+
+        var ownedGymIds = await _context.Gyms
+            .Where(gym => gym.OwnerUserId == _currentUser.UserId || (_currentUser.GymId.HasValue && gym.Id == _currentUser.GymId.Value))
+            .Select(gym => gym.Id)
+            .ToListAsync();
+
+        if (requestedGymId.HasValue)
+        {
+            return ownedGymIds.Contains(requestedGymId.Value) ? requestedGymId.Value : null;
+        }
+
+        if (_currentUser.GymId.HasValue && ownedGymIds.Contains(_currentUser.GymId.Value))
+        {
+            return _currentUser.GymId.Value;
+        }
+
+        return ownedGymIds.Count == 1 ? ownedGymIds[0] : null;
     }
 }

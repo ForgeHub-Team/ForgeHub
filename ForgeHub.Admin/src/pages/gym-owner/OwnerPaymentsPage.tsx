@@ -1,13 +1,11 @@
 import { Download } from "lucide-react";
 import { useMemo, useState } from "react";
 import { paymentsApi } from "../../api/paymentsApi";
-import { PaymentForm } from "../../components/forms/PaymentForm";
 import { Button } from "../../components/ui/Button";
 import { DataTable } from "../../components/ui/DataTable";
 import { ErrorState } from "../../components/ui/ErrorState";
 import { KpiCard } from "../../components/ui/KpiCard";
 import { LoadingState } from "../../components/ui/LoadingState";
-import { Modal } from "../../components/ui/Modal";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { Select } from "../../components/ui/Select";
 import { useApi } from "../../hooks/useApi";
@@ -78,10 +76,8 @@ function exportExcel(payments: Payment[]) {
 }
 
 export function OwnerPaymentsPage() {
-  const { data, loading, error, reload } = useApi(paymentsApi.getPayments, []);
+  const { data, loading, error } = useApi(paymentsApi.getPayments, []);
   const [filter, setFilter] = useState<DateFilter>("today");
-  const [open, setOpen] = useState(false);
-  const [notice, setNotice] = useState("");
 
   const filtered = useMemo(() => {
     const start = filterStart(filter);
@@ -99,7 +95,6 @@ export function OwnerPaymentsPage() {
   return (
     <>
       <PageHeader title="Payments" />
-      {notice ? <div className="mb-3 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm font-semibold text-emerald-700">{notice}</div> : null}
       <div className="mb-4 grid gap-4 md:grid-cols-3">
         <KpiCard label={`Total ${filterLabels[filter]}`} value={money(total)} />
         <KpiCard label="Payments shown" value={filtered.length} />
@@ -107,8 +102,6 @@ export function OwnerPaymentsPage() {
       <DataTable
         title="Payments"
         rows={filtered}
-        createLabel="Record payment"
-        onCreate={() => setOpen(true)}
         toolbar={(
           <>
             <Select className="min-w-40" value={filter} onChange={(event) => setFilter(event.target.value as DateFilter)}>
@@ -129,16 +122,6 @@ export function OwnerPaymentsPage() {
           { key: "at", label: "Time", render: (row) => row.paidAt ? new Date(row.paidAt).toLocaleString() : row.at ?? "Not assigned" }
         ]}
       />
-      <Modal open={open} title="Record payment" onClose={() => setOpen(false)}>
-        <PaymentForm
-          onSubmit={async (values) => {
-            await paymentsApi.createPayment(values);
-            setOpen(false);
-            setNotice("Payment recorded successfully.");
-            await reload();
-          }}
-        />
-      </Modal>
     </>
   );
 }

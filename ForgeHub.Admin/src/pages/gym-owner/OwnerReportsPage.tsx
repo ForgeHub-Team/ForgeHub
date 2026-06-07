@@ -1,12 +1,14 @@
 import { useMemo, useState } from "react";
 import { Cell, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { dashboardApi } from "../../api/dashboardApi";
+import { reportsApi, type OwnerReportPeriod } from "../../api/reportsApi";
 import { Button } from "../../components/ui/Button";
 import { Card } from "../../components/ui/Card";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { ErrorState } from "../../components/ui/ErrorState";
 import { LoadingState } from "../../components/ui/LoadingState";
 import { PageHeader } from "../../components/ui/PageHeader";
+import { Select } from "../../components/ui/Select";
 import { StatusBadge } from "../../components/ui/StatusBadge";
 import { useApi } from "../../hooks/useApi";
 import type { Branch } from "../../types/branch";
@@ -18,6 +20,11 @@ import { dateLabel, money, timeLabel } from "../../utils/formatters";
 const colors = ["#2563EB", "#16A34A", "#F97316", "#7C3AED", "#DC2626", "#0891B2"];
 
 type ViewMode = "chart" | "data";
+const reportPeriods: { value: OwnerReportPeriod; label: string }[] = [
+  { value: "1d", label: "1 day" },
+  { value: "7d", label: "7 days" },
+  { value: "1m", label: "1 month" }
+];
 
 interface RevenueRow {
   id: number;
@@ -204,9 +211,12 @@ function PieReportCard<T extends { id: number; branchName: string }>({
 
 export function OwnerReportsPage() {
   const { data, loading, error } = useApi(dashboardApi.getWorkspace, []);
+  const [period, setPeriod] = useState<OwnerReportPeriod>("1d");
+  const { data: ownerReport, loading: reportLoading, error: reportError } = useApi(() => reportsApi.getOwnerReport({ period }), [period]);
   const [revenueView, setRevenueView] = useState<ViewMode>("chart");
   const [memberView, setMemberView] = useState<ViewMode>("chart");
   const [checkInView, setCheckInView] = useState<ViewMode>("chart");
+  const [classView, setClassView] = useState<ViewMode>("chart");
 
   const branches = data?.branches ?? [];
   const payments = data?.payments ?? [];
@@ -245,6 +255,12 @@ export function OwnerReportsPage() {
   return (
     <>
       <PageHeader title="Reports" description="Scoped analytics for your gym and branches." />
+      <div className="mb-4 flex flex-wrap items-center gap-3">
+        <Select className="w-44" value={period} onChange={(event) => setPeriod(event.target.value as OwnerReportPeriod)}>
+          {reportPeriods.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
+        </Select>
+      </div>
+      {reportError ? <div className="mb-3 rounded-lg border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700">{reportError}</div> : null}
       <div className="grid gap-4 xl:grid-cols-2">
         <PieReportCard
           title="Revenue by Branch"
@@ -273,7 +289,19 @@ export function OwnerReportsPage() {
             { key: "inactiveMembers", label: "Inactive", render: (row) => row.inactiveMembers }
           ]}
         />
+        <PieReportCard
+          title="Given Classes by Class Name"
+          rows={(ownerReport?.givenClassesByName ?? []).map((row, index) => ({ id: index + 1, branchName: row.className || "Unnamed class", completedCount: row.completedCount }))}
+          value={(row) => row.completedCount}
+          view={classView}
+          onViewChange={setClassView}
+          columns={[
+            { key: "className", label: "Class", render: (row) => row.branchName },
+            { key: "completedCount", label: "Completed", render: (row) => row.completedCount }
+          ]}
+        />
       </div>
+      {reportLoading ? <div className="mt-3 text-sm font-semibold text-forge-muted">Refreshing report data...</div> : null}
       <Card>
         <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>

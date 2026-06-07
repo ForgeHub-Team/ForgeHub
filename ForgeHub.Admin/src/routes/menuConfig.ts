@@ -40,7 +40,6 @@ export const menuByRole: Record<Role, MenuItem[]> = {
     { label: "Members", path: "/gym-owner/members", icon: Users },
     { label: "Membership Plans", path: "/gym-owner/membership-plans", icon: Shield },
     { label: "Payments", path: "/gym-owner/payments", icon: CreditCard },
-    { label: "Classes", path: "/gym-owner/classes", icon: CalendarDays },
     { label: "Team", path: "/gym-owner/staff", icon: Users },
     { label: "Notifications", path: "/gym-owner/notifications", icon: Bell },
     { label: "Reports", path: "/gym-owner/reports", icon: BarChart3 },

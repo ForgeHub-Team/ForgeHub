@@ -3,12 +3,14 @@ export interface MembershipPlan {
   gymId?: number | null;
   name: string;
   price?: number | null;
+  durationMonth?: number | null;
   durationMonths?: number | null;
   accessType?: string | null;
   includesClasses?: boolean;
   includesPt?: boolean;
   isActive?: boolean;
   branchIds?: number[];
+  branches?: Array<{ id: number; name: string }>;
 }
 
 export interface MemberMembership {

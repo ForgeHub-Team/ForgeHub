@@ -26,12 +26,13 @@ export function EntityPage<T extends { id?: number | string }>({
   loader: () => Promise<T[]>;
   columns: DataColumn<T>[];
   createLabel?: string;
-  form?: (close: () => void, reload: () => void, notify: (message: string) => void) => React.ReactNode;
+  form?: (close: () => void, reload: () => void, notify: (message: string) => void, notifyError: (message: string) => void) => React.ReactNode;
   editForm?: (
     row: T,
     close: () => void,
     reload: () => void,
     notify: (message: string) => void,
+    notifyError: (message: string) => void,
     updateRow: (row: T) => void,
     refresh: () => Promise<void>
   ) => React.ReactNode;
@@ -91,8 +92,8 @@ export function EntityPage<T extends { id?: number | string }>({
       {notice ? <div className="mb-3 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm font-semibold text-emerald-700">{notice}</div> : null}
       {actionError ? <div className="mb-3 rounded-lg border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700">{actionError}</div> : null}
       <DataTable title={title} rows={data ?? []} columns={columns} createLabel={createLabel} onCreate={form ? () => setOpen(true) : undefined} actions={wrappedActions} actionsClassName={actionsClassName} actionButtonClassName={actionButtonClassName} />
-      {form ? <Modal open={open} title={createLabel ?? "Create"} onClose={() => setOpen(false)}>{form(() => setOpen(false), reload, setNotice)}</Modal> : null}
-      {editForm && editing ? <Modal open={Boolean(editing)} title={`Edit ${title}`} onClose={() => setEditing(null)}>{editForm(editing, () => setEditing(null), reload, setNotice, updateRow, refresh)}</Modal> : null}
+      {form ? <Modal open={open} title={createLabel ?? "Create"} onClose={() => setOpen(false)}>{form(() => setOpen(false), reload, setNotice, setActionError)}</Modal> : null}
+      {editForm && editing ? <Modal open={Boolean(editing)} title={`Edit ${title}`} onClose={() => setEditing(null)}>{editForm(editing, () => setEditing(null), reload, setNotice, setActionError, updateRow, refresh)}</Modal> : null}
       <Modal open={Boolean(details)} title={`${title} details`} onClose={() => setDetails(null)}>
         {details && detailRenderer ? detailRenderer(details) : (
           <dl className="grid gap-3 text-sm md:grid-cols-2">

@@ -267,21 +267,21 @@ begin
   where u.email like 'qa.member.%@forgehub.test'
     and not exists (select 1 from public.member_profiles mp where mp.member_id = m.id);
 
-  insert into public.membership_plans (gym_id, name, price, duration_months, access_type, includes_classes, includes_pt, is_active)
-  select gym_id, plan_name, price, duration_months, access_type, includes_classes, includes_pt, true
+  insert into public.membership_plans (gym_id, name, price, duration_month, access_type, includes_classes, includes_pt, is_active)
+  select gym_id, plan_name, price, duration_month, access_type, includes_classes, includes_pt, true
   from (values
     (gym1_id, 'QA One Day Pass', 5::numeric, 1, 'DAY_PASS', true, false),
-    (gym1_id, 'QA Monthly Basic', 30::numeric, 1, 'MONTHLY_BASIC', true, false),
-    (gym1_id, 'QA 3-Month Standard', 80::numeric, 3, 'THREE_MONTH_STANDARD', true, false),
-    (gym1_id, 'QA VIP All Branches', 120::numeric, 1, 'VIP_ALL_BRANCHES', true, true),
-    (gym1_id, 'QA Student Plan', 20::numeric, 1, 'STUDENT_PLAN', true, false),
-    (gym1_id, 'QA Freeze Allowed Plan', 40::numeric, 1, 'FREEZE_ALLOWED', true, false),
-    (gym2_id, 'QA Gym2 One Day Pass', 5::numeric, 1, 'GYM2_DAY_PASS', true, false),
-    (gym2_id, 'QA Monthly Local', 28::numeric, 1, 'GYM2_MONTHLY_LOCAL', true, false),
-    (gym2_id, 'QA VIP Local All Branches', 85::numeric, 1, 'GYM2_VIP_ALL_BRANCHES', true, false),
-    (gym3_id, 'QA Solo One Day Pass', 5::numeric, 1, 'GYM3_DAY_PASS', true, false),
-    (gym3_id, 'QA Monthly Solo', 25::numeric, 1, 'GYM3_MONTHLY_SOLO', true, false)
-  ) as p(gym_id, plan_name, price, duration_months, access_type, includes_classes, includes_pt)
+    (gym1_id, 'QA Monthly Basic', 30::numeric, 1, 'one_branch', true, false),
+    (gym1_id, 'QA 3-Month Standard', 80::numeric, 3, 'one_branch', true, false),
+    (gym1_id, 'QA VIP All Branches', 120::numeric, 1, 'multi-branch', true, true),
+    (gym1_id, 'QA Student Plan', 20::numeric, 1, 'one_branch', true, false),
+    (gym1_id, 'QA Freeze Allowed Plan', 40::numeric, 1, 'one_branch', true, false),
+    (gym2_id, 'QA Gym2 One Day Pass', 5::numeric, 1, 'DAY_PASS', true, false),
+    (gym2_id, 'QA Monthly Local', 28::numeric, 1, 'one_branch', true, false),
+    (gym2_id, 'QA VIP Local All Branches', 85::numeric, 1, 'multi-branch', true, false),
+    (gym3_id, 'QA Solo One Day Pass', 5::numeric, 1, 'DAY_PASS', true, false),
+    (gym3_id, 'QA Monthly Solo', 25::numeric, 1, 'one_branch', true, false)
+  ) as p(gym_id, plan_name, price, duration_month, access_type, includes_classes, includes_pt)
   where not exists (
     select 1 from public.membership_plans mp
     where mp.gym_id = p.gym_id and mp.name = p.plan_name
@@ -508,16 +508,8 @@ select count(*) as qa_plans
 from public.membership_plans
 where access_type in (
   'DAY_PASS',
-  'MONTHLY_BASIC',
-  'THREE_MONTH_STANDARD',
-  'VIP_ALL_BRANCHES',
-  'STUDENT_PLAN',
-  'FREEZE_ALLOWED',
-  'GYM2_DAY_PASS',
-  'GYM2_MONTHLY_LOCAL',
-  'GYM2_VIP_ALL_BRANCHES',
-  'GYM3_DAY_PASS',
-  'GYM3_MONTHLY_SOLO'
+  'one_branch',
+  'multi-branch'
 );
 
 select count(*) as qa_members

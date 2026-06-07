@@ -40,16 +40,16 @@ public static class QaDataSeeder
         await context.SaveChangesAsync();
 
         var dayPass = await EnsurePlan(context, gym1.Id, "QA One Day Pass", 5, 1, "DAY_PASS", true, false, [main.Id]);
-        var monthly = await EnsurePlan(context, gym1.Id, "QA Monthly Basic", 30, 1, "MONTHLY_BASIC", true, false, [main.Id]);
-        var threeMonth = await EnsurePlan(context, gym1.Id, "QA 3-Month Standard", 80, 3, "THREE_MONTH_STANDARD", true, false, [east.Id]);
-        var vip = await EnsurePlan(context, gym1.Id, "QA VIP All Branches", 120, 1, "VIP_ALL_BRANCHES", true, true, [main.Id, east.Id, beirut.Id]);
-        await EnsurePlan(context, gym1.Id, "QA Student Plan", 20, 1, "STUDENT_PLAN", true, false, [main.Id]);
-        var freezeAllowed = await EnsurePlan(context, gym1.Id, "QA Frozen Allowed Plan", 35, 1, "FREEZE_ALLOWED", true, false, [east.Id]);
+        var monthly = await EnsurePlan(context, gym1.Id, "QA Monthly Basic", 30, 1, "one_branch", true, false, [main.Id]);
+        var threeMonth = await EnsurePlan(context, gym1.Id, "QA 3-Month Standard", 80, 3, "one_branch", true, false, [east.Id]);
+        var vip = await EnsurePlan(context, gym1.Id, "QA VIP All Branches", 120, 1, "multi-branch", true, true, [main.Id, east.Id, beirut.Id]);
+        await EnsurePlan(context, gym1.Id, "QA Student Plan", 20, 1, "one_branch", true, false, [main.Id]);
+        var freezeAllowed = await EnsurePlan(context, gym1.Id, "QA Frozen Allowed Plan", 35, 1, "one_branch", true, false, [east.Id]);
         await EnsurePlan(context, gym2.Id, "QA Gym2 One Day Pass", 5, 1, "DAY_PASS", true, false, [strength.Id]);
-        var gym2Monthly = await EnsurePlan(context, gym2.Id, "QA Monthly Local", 28, 1, "MONTHLY_LOCAL", true, false, [strength.Id]);
-        await EnsurePlan(context, gym2.Id, "QA VIP Local All Branches", 85, 1, "VIP_LOCAL_ALL_BRANCHES", true, false, [strength.Id, cardio.Id]);
+        var gym2Monthly = await EnsurePlan(context, gym2.Id, "QA Monthly Local", 28, 1, "one_branch", true, false, [strength.Id]);
+        await EnsurePlan(context, gym2.Id, "QA VIP Local All Branches", 85, 1, "multi-branch", true, false, [strength.Id, cardio.Id]);
         await EnsurePlan(context, gym3.Id, "QA Solo One Day Pass", 5, 1, "DAY_PASS", true, false, [solo.Id]);
-        var gym3Monthly = await EnsurePlan(context, gym3.Id, "QA Monthly Solo", 25, 1, "MONTHLY_SOLO", true, false, [solo.Id]);
+        var gym3Monthly = await EnsurePlan(context, gym3.Id, "QA Monthly Solo", 25, 1, "one_branch", true, false, [solo.Id]);
 
         var activeMonthly = await EnsureMember(context, roleIds, gym1.Id, main.Id, "qa.member.active.monthly@forgehub.test", "Charbel Active Monthly", "71810001");
         var dayPassMember = await EnsureMember(context, roleIds, gym1.Id, main.Id, "qa.member.daypass@forgehub.test", "Maya Daypass", "71810002");

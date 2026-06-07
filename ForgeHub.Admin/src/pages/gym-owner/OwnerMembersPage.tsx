@@ -117,7 +117,7 @@ export function OwnerMembersPage() {
         actionButtonClassName="!h-9 !min-h-9 !rounded-lg !px-3 !py-1.5 text-xs"
       />
       <Modal open={open} title="Create member" onClose={() => setOpen(false)}>
-        <MemberForm branches={branches} onSubmit={(values) => saveMember(values, () => setOpen(false))} />
+        <MemberForm branches={branches} requirePassword onSubmit={(values) => saveMember(values, () => setOpen(false))} />
       </Modal>
       <Modal open={Boolean(editing)} title="Edit member" onClose={() => setEditing(null)}>
         {editing ? (

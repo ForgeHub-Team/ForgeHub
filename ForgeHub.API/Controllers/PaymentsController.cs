@@ -131,10 +131,15 @@ public class PaymentsController : ControllerBase
                 return Forbid();
             }
 
-            var scopedGymId = _currentUser.IsInRole(AppRoles.SuperAdmin) ? request.GymId : _currentUser.GymId;
+            var scopedGymId = _currentUser.IsInRole(AppRoles.SuperAdmin) ? request.GymId : await ResolveOwnedGymIdAsync(request.GymId ?? member?.GymId);
             var scopedBranchId = _currentUser.IsInRole(AppRoles.GymOwner) || _currentUser.IsInRole(AppRoles.SuperAdmin)
                 ? request.BranchId ?? member?.HomeBranchId
                 : _currentUser.BranchId;
+
+            if (!await IsValidPaymentScopeAsync(scopedGymId, scopedBranchId))
+            {
+                return BadRequest(new { message = "Invalid gym or branch scope." });
+            }
 
             var payment = new Payment
             {
@@ -188,7 +193,14 @@ public class PaymentsController : ControllerBase
             return query;
         }
 
-        if (_currentUser.GymId.HasValue)
+        if (_currentUser.IsInRole(AppRoles.GymOwner))
+        {
+            var ownedGymIds = _context.Gyms
+                .Where(gym => gym.OwnerUserId == _currentUser.UserId || (_currentUser.GymId.HasValue && gym.Id == _currentUser.GymId.Value))
+                .Select(gym => gym.Id);
+            query = query.Where(item => item.GymId.HasValue && ownedGymIds.Contains(item.GymId.Value));
+        }
+        else if (_currentUser.GymId.HasValue)
         {
             query = query.Where(item => item.GymId == _currentUser.GymId.Value);
         }
@@ -210,7 +222,7 @@ public class PaymentsController : ControllerBase
 
         if (_currentUser.IsInRole(AppRoles.GymOwner))
         {
-            return _currentUser.GymId.HasValue && member.GymId == _currentUser.GymId.Value;
+            return _context.Gyms.Any(gym => gym.Id == member.GymId && (gym.OwnerUserId == _currentUser.UserId || (_currentUser.GymId.HasValue && gym.Id == _currentUser.GymId.Value)));
         }
 
         if (_currentUser.IsInRole(AppRoles.BranchManager) || _currentUser.IsInRole(AppRoles.Staff))
@@ -219,5 +231,52 @@ public class PaymentsController : ControllerBase
         }
 
         return false;
+    }
+
+    private async Task<long?> ResolveOwnedGymIdAsync(long? requestedGymId)
+    {
+        if (!_currentUser.IsInRole(AppRoles.GymOwner))
+        {
+            return _currentUser.GymId;
+        }
+
+        var ownedGymIds = await _context.Gyms
+            .Where(gym => gym.OwnerUserId == _currentUser.UserId || (_currentUser.GymId.HasValue && gym.Id == _currentUser.GymId.Value))
+            .Select(gym => gym.Id)
+            .ToListAsync();
+
+        if (requestedGymId.HasValue)
+        {
+            return ownedGymIds.Contains(requestedGymId.Value) ? requestedGymId.Value : null;
+        }
+
+        if (_currentUser.GymId.HasValue && ownedGymIds.Contains(_currentUser.GymId.Value))
+        {
+            return _currentUser.GymId.Value;
+        }
+
+        return ownedGymIds.Count == 1 ? ownedGymIds[0] : null;
+    }
+
+    private async Task<bool> IsValidPaymentScopeAsync(long? gymId, long? branchId)
+    {
+        if (_currentUser.IsInRole(AppRoles.GymOwner))
+        {
+            if (!gymId.HasValue || !await _context.Gyms.AnyAsync(gym => gym.Id == gymId.Value && (gym.OwnerUserId == _currentUser.UserId || (_currentUser.GymId.HasValue && gym.Id == _currentUser.GymId.Value))))
+            {
+                return false;
+            }
+        }
+        else if (!_currentUser.IsInRole(AppRoles.SuperAdmin) && gymId != _currentUser.GymId)
+        {
+            return false;
+        }
+
+        if (!branchId.HasValue)
+        {
+            return true;
+        }
+
+        return await _context.Branches.AnyAsync(branch => branch.Id == branchId.Value && branch.GymId == gymId);
     }
 }

@@ -35,8 +35,25 @@ export interface ManagerReport {
   todayCheckIns: CheckInUnderlyingRow[];
 }
 
+export type OwnerReportPeriod = "1d" | "7d" | "1m";
+
+export interface OwnerClassGivenReportPoint {
+  className: string;
+  completedCount: number;
+}
+
+export interface OwnerReport {
+  period: OwnerReportPeriod;
+  from: string;
+  to: string;
+  gymId?: number | null;
+  branchId?: number | null;
+  givenClassesByName: OwnerClassGivenReportPoint[];
+}
+
 export const reportsApi = {
   getManagerReport: () => get<ManagerReport>("/reports/manager"),
+  getOwnerReport: (params?: { gymId?: number; branchId?: number; period?: OwnerReportPeriod }) => get<OwnerReport>("/reports/owner", params),
   getRevenueReport: () => get("/dashboard"),
   getAttendanceReport: () => get("/checkins"),
   getMembershipReport: () => get("/membermemberships"),

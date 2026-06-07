@@ -31,6 +31,13 @@ public class AdminController : ControllerBase
         var gymId = GetGymIdClaim();
         var branchId = GetBranchIdClaim();
         var isPlatformOwner = string.Equals(currentRole, AppRoles.SuperAdmin, StringComparison.OrdinalIgnoreCase);
+        var isGymOwner = string.Equals(currentRole, AppRoles.GymOwner, StringComparison.OrdinalIgnoreCase);
+        List<long> ownedGymIds = isGymOwner
+            ? await _context.Gyms
+                .Where(gym => gym.OwnerUserId == currentUserId || (gymId.HasValue && gym.Id == gymId.Value))
+                .Select(gym => gym.Id)
+                .ToListAsync()
+            : [];
 
         var roleLookup = await _context.Roles.ToDictionaryAsync(role => role.Id, role => role.Name);
 
@@ -40,7 +47,11 @@ public class AdminController : ControllerBase
 
         if (!isPlatformOwner)
         {
-            if (gymId.HasValue)
+            if (isGymOwner)
+            {
+                usersQuery = usersQuery.Where(user => user.GymId.HasValue && ownedGymIds.Contains(user.GymId.Value));
+            }
+            else if (gymId.HasValue)
             {
                 usersQuery = usersQuery.Where(user => user.GymId == gymId.Value);
             }
@@ -59,7 +70,11 @@ public class AdminController : ControllerBase
             .ToListAsync();
 
         var gymsQuery = _context.Gyms.AsQueryable();
-        if (!isPlatformOwner && gymId.HasValue)
+        if (isGymOwner)
+        {
+            gymsQuery = gymsQuery.Where(gym => ownedGymIds.Contains(gym.Id));
+        }
+        else if (!isPlatformOwner && gymId.HasValue)
         {
             gymsQuery = gymsQuery.Where(gym => gym.Id == gymId.Value);
         }
@@ -74,7 +89,11 @@ public class AdminController : ControllerBase
         var branchesQuery = _context.Branches.AsQueryable();
         if (!isPlatformOwner)
         {
-            if (gymId.HasValue)
+            if (isGymOwner)
+            {
+                branchesQuery = branchesQuery.Where(branch => branch.GymId.HasValue && ownedGymIds.Contains(branch.GymId.Value));
+            }
+            else if (gymId.HasValue)
             {
                 branchesQuery = branchesQuery.Where(branch => branch.GymId == gymId.Value);
             }
@@ -94,7 +113,11 @@ public class AdminController : ControllerBase
         var membersQuery = _context.Members.AsQueryable();
         if (!isPlatformOwner)
         {
-            if (gymId.HasValue)
+            if (isGymOwner)
+            {
+                membersQuery = membersQuery.Where(member => member.GymId.HasValue && ownedGymIds.Contains(member.GymId.Value));
+            }
+            else if (gymId.HasValue)
             {
                 membersQuery = membersQuery.Where(member => member.GymId == gymId.Value);
             }
@@ -116,7 +139,11 @@ public class AdminController : ControllerBase
         var memberIds = members.Select(member => member.Id).ToHashSet();
 
         var plansQuery = _context.MembershipPlans.AsQueryable();
-        if (!isPlatformOwner && gymId.HasValue)
+        if (isGymOwner)
+        {
+            plansQuery = plansQuery.Where(plan => plan.GymId.HasValue && ownedGymIds.Contains(plan.GymId.Value));
+        }
+        else if (!isPlatformOwner && gymId.HasValue)
         {
             plansQuery = plansQuery.Where(plan => plan.GymId == gymId.Value);
         }
@@ -155,7 +182,11 @@ public class AdminController : ControllerBase
         var paymentsQuery = _context.Payments.AsQueryable();
         if (!isPlatformOwner)
         {
-            if (gymId.HasValue)
+            if (isGymOwner)
+            {
+                paymentsQuery = paymentsQuery.Where(payment => payment.GymId.HasValue && ownedGymIds.Contains(payment.GymId.Value));
+            }
+            else if (gymId.HasValue)
             {
                 paymentsQuery = paymentsQuery.Where(payment => payment.GymId == gymId.Value);
             }
@@ -178,7 +209,11 @@ public class AdminController : ControllerBase
         var classesQuery = _context.Classes.AsQueryable();
         if (!isPlatformOwner)
         {
-            if (gymId.HasValue)
+            if (isGymOwner)
+            {
+                classesQuery = classesQuery.Where(item => item.GymId.HasValue && ownedGymIds.Contains(item.GymId.Value));
+            }
+            else if (gymId.HasValue)
             {
                 classesQuery = classesQuery.Where(item => item.GymId == gymId.Value);
             }
@@ -1027,7 +1062,8 @@ public class AdminController : ControllerBase
 
         if (User.IsInRole(AppRoles.GymOwner))
         {
-            return GetGymIdClaim() == branch.GymId;
+            var claimGymId = GetGymIdClaim();
+            return _context.Gyms.Any(gym => gym.Id == branch.GymId && (gym.OwnerUserId == GetCurrentUserId() || (claimGymId.HasValue && gym.Id == claimGymId.Value)));
         }
 
         if (User.IsInRole(AppRoles.BranchManager) || User.IsInRole(AppRoles.Staff))
@@ -1047,7 +1083,8 @@ public class AdminController : ControllerBase
 
         if (User.IsInRole(AppRoles.GymOwner))
         {
-            return GetGymIdClaim().HasValue && member.GymId == GetGymIdClaim();
+            var claimGymId = GetGymIdClaim();
+            return _context.Gyms.Any(gym => gym.Id == member.GymId && (gym.OwnerUserId == GetCurrentUserId() || (claimGymId.HasValue && gym.Id == claimGymId.Value)));
         }
 
         if (User.IsInRole(AppRoles.BranchManager) || User.IsInRole(AppRoles.Staff))

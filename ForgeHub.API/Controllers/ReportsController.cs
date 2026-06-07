@@ -89,6 +89,69 @@ public class ReportsController : ControllerBase
         });
     }
 
+    [HttpGet("owner")]
+    [Authorize(Roles = AppRoles.GymOwner)]
+    [ProducesResponseType(typeof(OwnerReportDto), StatusCodes.Status200OK)]
+    public async Task<ActionResult<OwnerReportDto>> GetOwnerReport(
+        [FromQuery] long? gymId,
+        [FromQuery] long? branchId,
+        [FromQuery] string? period)
+    {
+        var scopedGymId = await ResolveOwnedGymIdAsync(gymId);
+        if (!scopedGymId.HasValue)
+        {
+            return BadRequest(new { message = "Select one of your gyms to view reports." });
+        }
+
+        if (branchId.HasValue && !await _context.Branches.AnyAsync(branch => branch.Id == branchId.Value && branch.GymId == scopedGymId.Value))
+        {
+            return BadRequest(new { message = "Selected branch does not belong to this gym." });
+        }
+
+        var normalizedPeriod = NormalizePeriod(period);
+        var to = DateTime.UtcNow;
+        var from = normalizedPeriod switch
+        {
+            "7d" => to.Date.AddDays(-6),
+            "1m" => to.Date.AddMonths(-1),
+            _ => to.Date
+        };
+
+        var completedStatuses = new[] { "COMPLETED", "Completed", "completed", "DONE", "Done", "done", "ATTENDED", "Attended", "attended" };
+        var classQuery = _context.Classes
+            .Where(item =>
+                item.GymId == scopedGymId.Value &&
+                (!branchId.HasValue || item.BranchId == branchId.Value) &&
+                item.StartTime >= from &&
+                item.StartTime <= to);
+
+        var classIds = classQuery.Select(item => item.Id);
+        var givenByName = await _context.ClassBookings
+            .Where(booking => booking.ClassId.HasValue &&
+                classIds.Contains(booking.ClassId.Value) &&
+                booking.Status != null &&
+                completedStatuses.Contains(booking.Status))
+            .Join(classQuery, booking => booking.ClassId, gymClass => gymClass.Id, (booking, gymClass) => gymClass)
+            .GroupBy(gymClass => gymClass.Name ?? "Unnamed class")
+            .Select(group => new OwnerClassGivenReportPointDto
+            {
+                ClassName = group.Key,
+                CompletedCount = group.Count()
+            })
+            .OrderByDescending(item => item.CompletedCount)
+            .ToListAsync();
+
+        return Ok(new OwnerReportDto
+        {
+            Period = normalizedPeriod,
+            From = from,
+            To = to,
+            GymId = scopedGymId,
+            BranchId = branchId,
+            GivenClassesByName = givenByName
+        });
+    }
+
     private async Task<ManagerReportDto> BuildManagerReportAsync(Branch branch)
     {
         var todayStart = DateTime.UtcNow.Date;
@@ -219,7 +282,14 @@ public class ReportsController : ControllerBase
             return query;
         }
 
-        if (_currentUser.GymId.HasValue)
+        if (_currentUser.IsInRole(AppRoles.GymOwner))
+        {
+            var ownedGymIds = _context.Gyms
+                .Where(gym => gym.OwnerUserId == _currentUser.UserId || (_currentUser.GymId.HasValue && gym.Id == _currentUser.GymId.Value))
+                .Select(gym => gym.Id);
+            query = query.Where(item => item.GymId.HasValue && ownedGymIds.Contains(item.GymId.Value));
+        }
+        else if (_currentUser.GymId.HasValue)
         {
             query = query.Where(item => item.GymId == _currentUser.GymId.Value);
         }
@@ -242,6 +312,15 @@ public class ReportsController : ControllerBase
         if (_currentUser.BranchId.HasValue && !_currentUser.IsInRole(AppRoles.GymOwner))
         {
             return query.Where(item => item.BranchId == _currentUser.BranchId.Value);
+        }
+
+        if (_currentUser.IsInRole(AppRoles.GymOwner))
+        {
+            var ownedGymIds = _context.Gyms
+                .Where(gym => gym.OwnerUserId == _currentUser.UserId || (_currentUser.GymId.HasValue && gym.Id == _currentUser.GymId.Value))
+                .Select(gym => gym.Id);
+            var branchIds = _context.Branches.Where(item => item.GymId.HasValue && ownedGymIds.Contains(item.GymId.Value)).Select(item => item.Id);
+            return query.Where(item => item.BranchId.HasValue && branchIds.Contains(item.BranchId.Value));
         }
 
         if (_currentUser.GymId.HasValue)
@@ -326,4 +405,34 @@ public class ReportsController : ControllerBase
         string.Equals(AppStatuses.NormalizeCheckIn(checkIn.Status), AppStatuses.CheckInAutoCheckedOut, StringComparison.Ordinal) ||
         (checkIn.CheckOutMethod?.Contains("auto", StringComparison.OrdinalIgnoreCase) == true) ||
         (checkIn.CheckOutMethod?.Contains("geofence", StringComparison.OrdinalIgnoreCase) == true);
+
+    private async Task<long?> ResolveOwnedGymIdAsync(long? requestedGymId)
+    {
+        var ownedGymIds = await _context.Gyms
+            .Where(gym => gym.OwnerUserId == _currentUser.UserId || (_currentUser.GymId.HasValue && gym.Id == _currentUser.GymId.Value))
+            .Select(gym => gym.Id)
+            .ToListAsync();
+
+        if (requestedGymId.HasValue)
+        {
+            return ownedGymIds.Contains(requestedGymId.Value) ? requestedGymId.Value : null;
+        }
+
+        if (_currentUser.GymId.HasValue && ownedGymIds.Contains(_currentUser.GymId.Value))
+        {
+            return _currentUser.GymId.Value;
+        }
+
+        return ownedGymIds.Count == 1 ? ownedGymIds[0] : null;
+    }
+
+    private static string NormalizePeriod(string? period)
+    {
+        return period?.Trim().ToLowerInvariant() switch
+        {
+            "7d" or "7days" or "7-days" => "7d",
+            "1m" or "month" or "1month" or "1-month" => "1m",
+            _ => "1d"
+        };
+    }
 }

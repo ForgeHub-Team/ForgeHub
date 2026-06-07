@@ -1,11 +1,15 @@
 import { useNavigate } from "react-router-dom";
 import { branchesApi } from "../../api/branchesApi";
+import { dashboardApi } from "../../api/dashboardApi";
 import { BranchForm } from "../../components/forms/BranchForm";
+import { useApi } from "../../hooks/useApi";
 import { EntityPage } from "../shared/EntityPage";
 import type { Branch } from "../../types/branch";
 
 export function OwnerBranchesPage() {
   const navigate = useNavigate();
+  const { data: workspace } = useApi(dashboardApi.getWorkspace, []);
+  const gyms = workspace?.gyms ?? [];
   return (
     <EntityPage<Branch>
       title="Branches"
@@ -18,18 +22,28 @@ export function OwnerBranchesPage() {
         { key: "capacity", label: "Capacity" },
         { key: "isActive", label: "Active", badge: true }
       ]}
-      form={(close, reload) => (
+      form={(close, reload, notify, notifyError) => (
         <BranchForm
+          gyms={gyms}
           onSubmit={async (v) => {
-            await branchesApi.createBranch(v);
-            close();
-            await reload();
+            try {
+              notify("");
+              notifyError("");
+              await branchesApi.createBranch(v);
+              close();
+              notify("Branch created successfully.");
+              await reload();
+            } catch (err) {
+              notifyError(err instanceof Error ? err.message : "Unable to create branch.");
+            }
           }}
         />
       )}
       editForm={(row, close, reload) => (
         <BranchForm
+          gyms={gyms}
           initialValues={{
+            gymId: row.gymId ?? undefined,
             name: row.name,
             address: row.address ?? undefined,
             phone: row.phone ?? undefined,

@@ -125,11 +125,11 @@ function ActionLink({ to, children, primary = false }: { to: string; children: R
 function BranchPerformanceChart({ branches }: { branches: Branch[] }) {
   const chartData = branches.map((branch) => ({
     name: cleanLabel(branch.name, "Unknown Branch"),
-    revenue: branch.revenue ?? 0,
-    members: branch.members ?? 0
+    active: branch.activeToday ?? 0,
+    capacity: branch.capacity ?? 0
   }));
 
-  if (!chartData.length) return <EmptyState title="No chart data available yet." message="Branch performance will appear when branches return from the backend." />;
+  if (!chartData.length) return <EmptyState title="No branches available yet." message="Branch capacity will appear after branches are created." />;
 
   return (
     <div className="h-72">
@@ -138,9 +138,9 @@ function BranchPerformanceChart({ branches }: { branches: Branch[] }) {
           <CartesianGrid strokeDasharray="3 3" />
           <XAxis dataKey="name" />
           <YAxis />
-          <Tooltip formatter={(value: unknown, name: unknown) => name === "revenue" ? money(value) : value} />
-          <Bar dataKey="revenue" fill="#2563EB" radius={[6, 6, 0, 0]} />
-          <Bar dataKey="members" fill="#16A34A" radius={[6, 6, 0, 0]} />
+          <Tooltip />
+          <Bar dataKey="active" name="Active today" fill="#2563EB" radius={[6, 6, 0, 0]} />
+          <Bar dataKey="capacity" name="Capacity" fill="#16A34A" radius={[6, 6, 0, 0]} />
         </BarChart>
       </ResponsiveContainer>
     </div>

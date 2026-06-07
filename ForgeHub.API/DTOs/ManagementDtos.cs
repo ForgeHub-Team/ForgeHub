@@ -96,6 +96,7 @@ public class CreateMemberRequest
     public string? Phone { get; set; }
     [EmailAddress]
     public string? Email { get; set; }
+    public string? Password { get; set; }
     public string? QrCode { get; set; }
     public DateOnly? JoinDate { get; set; }
     public bool IsActive { get; set; } = true;
@@ -105,13 +106,28 @@ public class UpdateMemberRequest : CreateMemberRequest
 {
 }
 
+public class OwnerClassGivenReportPointDto
+{
+    public string ClassName { get; set; } = string.Empty;
+    public int CompletedCount { get; set; }
+}
+
+public class OwnerReportDto
+{
+    public string Period { get; set; } = "1d";
+    public DateTime From { get; set; }
+    public DateTime To { get; set; }
+    public long? GymId { get; set; }
+    public long? BranchId { get; set; }
+    public List<OwnerClassGivenReportPointDto> GivenClassesByName { get; set; } = [];
+}
+
 public class CreateMembershipPlanRequest
 {
     public long? GymId { get; set; }
-    [Required]
-    public string Name { get; set; } = string.Empty;
-    public decimal? Price { get; set; }
-    public int? DurationMonths { get; set; }
+    public string? Name { get; set; }
+    public decimal Price { get; set; }
+    public int DurationMonth { get; set; }
     public string? AccessType { get; set; }
     public bool IncludesClasses { get; set; }
     public bool IncludesPt { get; set; }

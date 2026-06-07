@@ -279,20 +279,66 @@ public class MembersController : ControllerBase
     {
         try
         {
-            var scopedGymId = _currentUser.IsInRole(AppRoles.SuperAdmin) ? request.GymId : _currentUser.GymId;
+            if (string.IsNullOrWhiteSpace(request.FullName))
+            {
+                return BadRequest(new { message = "Full name is required." });
+            }
+
+            if (string.IsNullOrWhiteSpace(request.Email))
+            {
+                return BadRequest(new { message = "Email is required." });
+            }
+
+            if (string.IsNullOrWhiteSpace(request.Password) || request.Password.Length < 8)
+            {
+                return BadRequest(new { message = "Password must be at least 8 characters." });
+            }
+
+            var email = request.Email.Trim().ToLowerInvariant();
+            if (await _context.Users.AnyAsync(user => user.Email != null && user.Email.ToLower() == email))
+            {
+                return BadRequest(new { message = "Email already exists." });
+            }
+
+            var memberRole = await _context.Roles.FirstOrDefaultAsync(role => role.Name == AppRoles.Member);
+            if (memberRole == null)
+            {
+                return BadRequest(new { message = "Member role is not configured." });
+            }
+
             var scopedBranchId = _currentUser.IsInRole(AppRoles.GymOwner) || _currentUser.IsInRole(AppRoles.SuperAdmin)
                 ? request.HomeBranchId
                 : _currentUser.BranchId;
+            var scopedGymId = _currentUser.IsInRole(AppRoles.SuperAdmin)
+                ? request.GymId
+                : await ResolveOwnedGymIdAsync(request.GymId, scopedBranchId);
 
             if (!await IsValidMemberScopeAsync(scopedGymId, scopedBranchId))
             {
                 return BadRequest(new { message = "Invalid gym or branch scope." });
             }
 
+            var memberUser = new User
+            {
+                GymId = scopedGymId,
+                BranchId = scopedBranchId,
+                RoleId = memberRole.Id,
+                FullName = request.FullName.Trim(),
+                Email = email,
+                Phone = request.Phone,
+                PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password),
+                IsActive = request.IsActive,
+                CreatedAt = DateTime.UtcNow
+            };
+
+            _context.Users.Add(memberUser);
+            await _context.SaveChangesAsync();
+
             var member = new Member
             {
                 GymId = scopedGymId,
                 HomeBranchId = scopedBranchId,
+                UserId = memberUser.Id,
                 FullName = request.FullName,
                 Gender = request.Gender,
                 Dob = request.Dob,
@@ -305,7 +351,8 @@ public class MembersController : ControllerBase
 
             _context.Members.Add(member);
             await _context.SaveChangesAsync();
-            return CreatedAtAction(nameof(GetMember), new { id = member.Id }, member);
+            var response = await BuildMemberDtoAsync(member.Id);
+            return CreatedAtAction(nameof(GetMember), new { id = member.Id }, response);
         }
         catch (Exception ex)
         {
@@ -419,7 +466,14 @@ public class MembersController : ControllerBase
             return query;
         }
 
-        if (_currentUser.GymId.HasValue)
+        if (_currentUser.IsInRole(AppRoles.GymOwner))
+        {
+            var ownedGymIds = _context.Gyms
+                .Where(gym => gym.OwnerUserId == _currentUser.UserId || (_currentUser.GymId.HasValue && gym.Id == _currentUser.GymId.Value))
+                .Select(gym => gym.Id);
+            query = query.Where(item => item.GymId.HasValue && ownedGymIds.Contains(item.GymId.Value));
+        }
+        else if (_currentUser.GymId.HasValue)
         {
             query = query.Where(item => item.GymId == _currentUser.GymId.Value);
         }
@@ -440,7 +494,14 @@ public class MembersController : ControllerBase
 
     private async Task<bool> IsValidMemberScopeAsync(long? gymId, long? branchId)
     {
-        if (!_currentUser.IsInRole(AppRoles.SuperAdmin) && gymId != _currentUser.GymId)
+        if (_currentUser.IsInRole(AppRoles.GymOwner))
+        {
+            if (!gymId.HasValue || !await _context.Gyms.AnyAsync(gym => gym.Id == gymId.Value && (gym.OwnerUserId == _currentUser.UserId || (_currentUser.GymId.HasValue && gym.Id == _currentUser.GymId.Value))))
+            {
+                return false;
+            }
+        }
+        else if (!_currentUser.IsInRole(AppRoles.SuperAdmin) && gymId != _currentUser.GymId)
         {
             return false;
         }
@@ -466,6 +527,74 @@ public class MembersController : ControllerBase
         }
 
         return true;
+    }
+
+    private async Task<long?> ResolveOwnedGymIdAsync(long? requestedGymId, long? requestedBranchId = null)
+    {
+        if (!_currentUser.IsInRole(AppRoles.GymOwner))
+        {
+            return _currentUser.GymId;
+        }
+
+        var ownedGymIds = await _context.Gyms
+            .Where(gym => gym.OwnerUserId == _currentUser.UserId || (_currentUser.GymId.HasValue && gym.Id == _currentUser.GymId.Value))
+            .Select(gym => gym.Id)
+            .ToListAsync();
+
+        if (requestedGymId.HasValue)
+        {
+            return ownedGymIds.Contains(requestedGymId.Value) ? requestedGymId.Value : null;
+        }
+
+        if (requestedBranchId.HasValue)
+        {
+            var branchGymId = await _context.Branches
+                .Where(branch => branch.Id == requestedBranchId.Value && branch.GymId.HasValue && ownedGymIds.Contains(branch.GymId.Value))
+                .Select(branch => branch.GymId)
+                .FirstOrDefaultAsync();
+            if (branchGymId.HasValue)
+            {
+                return branchGymId.Value;
+            }
+        }
+
+        if (_currentUser.GymId.HasValue && ownedGymIds.Contains(_currentUser.GymId.Value))
+        {
+            return _currentUser.GymId.Value;
+        }
+
+        return ownedGymIds.Count == 1 ? ownedGymIds[0] : null;
+    }
+
+    private async Task<object> BuildMemberDtoAsync(long memberId)
+    {
+        var member = await _context.Members.FirstAsync(item => item.Id == memberId);
+        var branchName = member.HomeBranchId.HasValue
+            ? await _context.Branches.Where(branch => branch.Id == member.HomeBranchId.Value).Select(branch => branch.Name).FirstOrDefaultAsync()
+            : string.Empty;
+
+        return new
+        {
+            member.Id,
+            member.GymId,
+            BranchId = member.HomeBranchId,
+            HomeBranchId = member.HomeBranchId,
+            BranchName = branchName ?? string.Empty,
+            Name = member.FullName ?? string.Empty,
+            FullName = member.FullName ?? string.Empty,
+            member.Email,
+            member.Phone,
+            member.Gender,
+            member.Dob,
+            PlanId = "Unassigned",
+            Status = member.IsActive ? AppStatuses.MembershipActive : "INACTIVE",
+            PaymentStatus = AppStatuses.PaymentPending,
+            AttendanceToday = "Not checked in today",
+            JoinedAt = member.JoinDate?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) ?? string.Empty,
+            MembershipStartDate = string.Empty,
+            MembershipEndDate = string.Empty,
+            member.IsActive
+        };
     }
 
     private void AddAudit(string action, string tableName, long recordId)

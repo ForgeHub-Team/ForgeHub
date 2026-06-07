@@ -11,7 +11,6 @@ import { PlatformUsersPage } from "../pages/superadmin/PlatformUsersPage";
 import { SuperAdminDashboard } from "../pages/superadmin/SuperAdminDashboard";
 import { GymOwnerDashboard } from "../pages/gym-owner/GymOwnerDashboard";
 import { OwnerBranchesPage } from "../pages/gym-owner/OwnerBranchesPage";
-import { OwnerClassesPage } from "../pages/gym-owner/OwnerClassesPage";
 import { OwnerMembersPage } from "../pages/gym-owner/OwnerMembersPage";
 import { OwnerMembershipPlansPage } from "../pages/gym-owner/OwnerMembershipPlansPage";
 import { OwnerNotificationsPage } from "../pages/gym-owner/OwnerNotificationsPage";
@@ -80,7 +79,7 @@ export function AppRoutes() {
             <Route path="/gym-owner/members" element={<OwnerMembersPage />} />
             <Route path="/gym-owner/membership-plans" element={<OwnerMembershipPlansPage />} />
             <Route path="/gym-owner/payments" element={<OwnerPaymentsPage />} />
-            <Route path="/gym-owner/classes" element={<OwnerClassesPage />} />
+            <Route path="/gym-owner/classes" element={<Navigate to="/unauthorized" replace />} />
             <Route path="/gym-owner/trainers" element={<OwnerTrainersPage />} />
             <Route path="/gym-owner/staff" element={<OwnerStaffPage />} />
             <Route path="/gym-owner/notifications" element={<OwnerNotificationsPage />} />
