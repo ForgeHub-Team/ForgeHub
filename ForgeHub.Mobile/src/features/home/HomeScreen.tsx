@@ -9,7 +9,6 @@ import { StyleSheet, Text, View } from "react-native";
 import { MembershipSummaryCard } from "./components/MembershipSummaryCard";
 import { CheckInStatusCard } from "./components/CheckInStatusCard";
 import { QuickActionsGrid } from "./components/QuickActionsGrid";
-import { TodayClassesPreview } from "./components/TodayClassesPreview";
 
 export function HomeScreen() {
   const query = useQuery({ queryKey: ["home"], queryFn: getHomeDashboard });
@@ -38,8 +37,6 @@ export function HomeScreen() {
       <CheckInStatusCard session={data?.currentGymSession ?? null} />
       <SectionTitle title="Quick actions" />
       <QuickActionsGrid hasActiveSession={Boolean(data?.currentGymSession?.hasActiveCheckIn)} />
-      <SectionTitle title="Classes" />
-      <TodayClassesPreview classes={data?.classes ?? []} />
     </ForgeScreen>
   );
 }

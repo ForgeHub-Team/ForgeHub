@@ -2,7 +2,7 @@ import { BranchAccess } from "@/types/branch";
 import { Booking, GymClass } from "@/types/class";
 import { CheckInHistoryItem } from "@/types/checkIn";
 import { BodyInsights } from "@/types/insights";
-import { Membership } from "@/types/membership";
+import { Membership, MembershipPlan } from "@/types/membership";
 import { NotificationItem } from "@/types/notification";
 import { PaymentItem } from "@/types/payment";
 import { MemberProfile } from "@/types/profile";
@@ -65,6 +65,30 @@ function mapMembershipBranch(item: any) {
     status: text(item?.status, "Unknown"),
     isOpenNow: bool(item?.isOpenNow, false),
     canCheckIn: bool(item?.canCheckIn, false)
+  };
+}
+
+export function mapMembershipPlan(json: any): MembershipPlan {
+  const branches = Array.isArray(json?.branches)
+    ? json.branches.map((branch: any) => ({
+        id: id(branch?.id ?? branch?.branchId),
+        name: text(branch?.name ?? branch?.branchName, "Branch")
+      }))
+    : [];
+
+  return {
+    id: id(json?.id),
+    gymId: json?.gymId === undefined || json?.gymId === null ? null : id(json.gymId),
+    name: text(json?.name ?? json?.planName, "Membership plan"),
+    price: json?.price === undefined || json?.price === null ? null : asNumber(json.price),
+    durationMonth: json?.durationMonth === undefined || json?.durationMonth === null ? null : asNumber(json.durationMonth),
+    durationMonths: json?.durationMonths === undefined || json?.durationMonths === null ? null : asNumber(json.durationMonths),
+    accessType: json?.accessType ?? null,
+    includesClasses: bool(json?.includesClasses, false),
+    includesPt: bool(json?.includesPt, false),
+    isActive: bool(json?.isActive, true),
+    branchIds: Array.isArray(json?.branchIds) ? json.branchIds.map(id) : [],
+    branches
   };
 }
 

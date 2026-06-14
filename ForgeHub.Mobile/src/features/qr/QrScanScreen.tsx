@@ -20,6 +20,8 @@ export function QrScanScreen() {
   const theme = useForgeTheme();
   const { width } = useWindowDimensions();
   const frameSize = Math.min(320, Math.round(width * 0.75));
+  const halfFrame = frameSize / 2;
+  const scanMaskColor = theme.mode === "light" ? "rgba(10,10,10,0.64)" : theme.overlay;
   const scanLine = useRef(new Animated.Value(0)).current;
   const [permission, requestPermission] = useCameraPermissions();
   const [locationStatus, setLocationStatus] = useState<Location.PermissionStatus | null>(null);
@@ -140,9 +142,9 @@ export function QrScanScreen() {
         ) : null}
         {!result ? (
           <>
-            <View style={[styles.shade, styles.topShade, { backgroundColor: theme.overlay }]} />
-            <View style={[styles.middleRow, { height: frameSize }]}>
-              <View style={[styles.sideShade, { backgroundColor: theme.overlay }]} />
+            <View style={[styles.shade, styles.topShade, { marginBottom: halfFrame, backgroundColor: scanMaskColor }]} />
+            <View style={[styles.middleRow, { height: frameSize, transform: [{ translateY: -halfFrame }] }]}>
+              <View style={[styles.sideShade, { backgroundColor: scanMaskColor }]} />
               <View style={[styles.frame, { width: frameSize, height: frameSize, shadowColor: theme.primary }]}>
                 <Corner position="tl" />
                 <Corner position="tr" />
@@ -151,9 +153,9 @@ export function QrScanScreen() {
                 <Animated.View style={[styles.scanLine, { backgroundColor: theme.primary, transform: [{ translateY: lineTranslate }], shadowColor: theme.primary }]} />
                 {mutation.isPending ? <Text style={styles.validating}>Validating...</Text> : null}
               </View>
-              <View style={[styles.sideShade, { backgroundColor: theme.overlay }]} />
+              <View style={[styles.sideShade, { backgroundColor: scanMaskColor }]} />
             </View>
-            <View style={[styles.shade, styles.bottomShade, { backgroundColor: theme.overlay }]} />
+            <View style={[styles.shade, styles.bottomShade, { marginTop: halfFrame, backgroundColor: scanMaskColor }]} />
           </>
         ) : null}
 
@@ -238,11 +240,11 @@ function isRangeError(error: unknown) {
 const styles = StyleSheet.create({
   scanner: { flex: 1, justifyContent: "center" },
   shade: { position: "absolute", left: 0, right: 0 },
-  topShade: { top: 0, bottom: "50%", marginBottom: 160 },
-  bottomShade: { top: "50%", bottom: 0, marginTop: 160 },
-  middleRow: { position: "absolute", left: 0, right: 0, top: "50%", transform: [{ translateY: -160 }], flexDirection: "row" },
+  topShade: { top: 0, bottom: "50%" },
+  bottomShade: { top: "50%", bottom: 0 },
+  middleRow: { position: "absolute", left: 0, right: 0, top: "50%", flexDirection: "row" },
   sideShade: { flex: 1 },
-  frame: { alignSelf: "center", borderRadius: 28, overflow: "hidden", shadowOpacity: 0.28, shadowRadius: 18 },
+  frame: { alignSelf: "center", borderRadius: 28, overflow: "hidden", backgroundColor: "transparent", shadowOpacity: 0.28, shadowRadius: 18 },
   corner: { position: "absolute", width: 48, height: 48, borderWidth: 4 },
   tl: { top: 0, left: 0, borderRightWidth: 0, borderBottomWidth: 0, borderTopLeftRadius: 24 },
   tr: { top: 0, right: 0, borderLeftWidth: 0, borderBottomWidth: 0, borderTopRightRadius: 24 },

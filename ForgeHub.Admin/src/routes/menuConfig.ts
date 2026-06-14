@@ -28,7 +28,6 @@ export const menuByRole: Record<Role, MenuItem[]> = {
     { label: "Gyms & Owners", path: "/superadmin/gyms", icon: Building2 },
     { label: "Platform Users", path: "/superadmin/platform-users", icon: Users },
     { label: "QR Codes", path: "/superadmin/branch-qr", icon: FileText },
-    { label: "Reports", path: "/superadmin/reports", icon: BarChart3 },
     { label: "Audit Logs", path: "/superadmin/audit-logs", icon: FileText },
     { label: "Settings", path: "/settings", icon: Settings }
   ],
@@ -41,7 +40,6 @@ export const menuByRole: Record<Role, MenuItem[]> = {
     { label: "Payments", path: "/gym-owner/payments", icon: CreditCard },
     { label: "Team", path: "/gym-owner/staff", icon: Users },
     { label: "Notifications", path: "/gym-owner/notifications", icon: Bell },
-    { label: "Reports", path: "/gym-owner/reports", icon: BarChart3 },
     { label: "Settings", path: "/settings", icon: Settings }
   ],
   BranchManager: [
@@ -56,7 +54,6 @@ export const menuByRole: Record<Role, MenuItem[]> = {
     { label: "Reports", path: "/branch-manager/reports", icon: BarChart3 }
   ],
   Staff: [
-    { label: "Dashboard", path: "/staff/dashboard", icon: Home },
     { label: "Member Search", path: "/staff/member-search", icon: Search },
     { label: "Register Member", path: "/staff/register-member", icon: UserPlus },
     { label: "Renew Membership", path: "/staff/renew-membership", icon: Shield },
@@ -65,10 +62,10 @@ export const menuByRole: Record<Role, MenuItem[]> = {
     { label: "Branch QR", path: "/staff/branch-qr", icon: FileText }
   ],
   Trainer: [
-    { label: "Today", path: "/trainer/today", icon: Activity },
-    { label: "Schedule", path: "/trainer/schedule", icon: CalendarDays },
-    { label: "Members", path: "/trainer/members", icon: Users },
-    { label: "Note", path: "/trainer/notes/new", icon: FileText },
+    { label: "Dashboard", path: "/trainer/dashboard", icon: Activity },
+    { label: "My Classes", path: "/trainer/schedule", icon: CalendarDays },
+    { label: "Assigned Members", path: "/trainer/members", icon: Users },
+    { label: "Notes", path: "/trainer/notes/new", icon: FileText },
     { label: "Profile", path: "/trainer/profile", icon: Settings }
   ],
   Member: []

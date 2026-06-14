@@ -585,6 +585,9 @@ public class AdminDashboardRoleDto
     public string Tasks { get; set; } = "0";
     public string ClassesToday { get; set; } = "0";
     public string Subscriptions { get; set; } = "0 active";
+    public decimal MonthlyPlatformRevenue { get; set; }
+    public decimal PendingRevenue { get; set; }
+    public int LatePayments { get; set; }
     public string Conversion { get; set; } = "0%";
     public List<int> RevenueTrend { get; set; } = [];
     public List<AdminBarPointDto> GymPerformance { get; set; } = [];

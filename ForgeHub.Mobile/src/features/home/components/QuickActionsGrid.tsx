@@ -47,7 +47,8 @@ function TimerMiniModal({ open, onClose }: { open: boolean; onClose: () => void 
   const timer = useWorkoutTimerStore();
   const elapsedMs = timer.getElapsedMs();
   const remainingMs = timer.getRemainingMs();
-  const displayMs = timer.mode === "countdown" ? remainingMs : elapsedMs;
+  const selectedMode = timer.mode === "countdown" ? "countdown" : "timer";
+  const displayMs = selectedMode === "countdown" ? remainingMs : elapsedMs;
 
   useEffect(() => {
     const interval = setInterval(() => setNow(Date.now()), 1000);
@@ -64,12 +65,12 @@ function TimerMiniModal({ open, onClose }: { open: boolean; onClose: () => void 
   };
 
   const start = () => {
-    if (timer.mode === "countdown") {
+    if (selectedMode === "countdown") {
       timer.startTimer("countdown", { countdownDurationMs: Math.max(1, Number(minutes) || 1) * 60_000 });
       return;
     }
 
-    timer.startTimer(timer.mode);
+    timer.startTimer("timer");
   };
 
   return (
@@ -84,9 +85,9 @@ function TimerMiniModal({ open, onClose }: { open: boolean; onClose: () => void 
           </View>
 
           <View style={styles.segmentRow}>
-            {(["timer", "countdown", "laps"] as WorkoutTimerMode[]).map((mode) => (
-              <Pressable key={mode} onPress={() => switchMode(mode)} style={[styles.segment, timer.mode === mode && styles.segmentActive]}>
-                <Text style={[styles.segmentText, timer.mode === mode && styles.segmentTextActive]}>{mode === "laps" ? "Laps" : mode === "countdown" ? "Countdown" : "Timer"}</Text>
+            {(["timer", "countdown"] as WorkoutTimerMode[]).map((mode) => (
+              <Pressable key={mode} onPress={() => switchMode(mode)} style={[styles.segment, selectedMode === mode && styles.segmentActive]}>
+                <Text style={[styles.segmentText, selectedMode === mode && styles.segmentTextActive]}>{mode === "countdown" ? "Countdown" : "Timer"}</Text>
               </Pressable>
             ))}
           </View>
@@ -94,7 +95,7 @@ function TimerMiniModal({ open, onClose }: { open: boolean; onClose: () => void 
           <Text style={styles.timeFace}>{formatDuration(displayMs)}</Text>
           <Text style={styles.modeText}>{timer.isRunning ? "Running" : timer.completed ? "Done" : "Ready"}</Text>
 
-          {timer.mode === "countdown" ? (
+          {selectedMode === "countdown" ? (
             <View style={styles.inputRow}>
               <Text style={styles.inputLabel}>Minutes</Text>
               <TextInput value={minutes} onChangeText={setMinutes} keyboardType="number-pad" style={styles.input} />
@@ -105,8 +106,8 @@ function TimerMiniModal({ open, onClose }: { open: boolean; onClose: () => void 
             <ForgeButton title={timer.isRunning ? "Pause" : "Start"} onPress={timer.isRunning ? timer.pauseTimer : start} style={styles.flexButton} />
             <ForgeButton title="Reset" variant="secondary" onPress={timer.resetTimer} style={styles.flexButton} />
           </View>
-          {timer.mode === "laps" ? <ForgeButton title="Lap" variant="secondary" disabled={!timer.isRunning} onPress={timer.addLap} /> : null}
-          {timer.mode === "laps" && timer.laps.length ? (
+          {selectedMode === "timer" ? <ForgeButton title="Lap" variant="secondary" disabled={!timer.isRunning} onPress={timer.addLap} /> : null}
+          {selectedMode === "timer" && timer.laps.length ? (
             <View style={styles.lapList}>
               {timer.laps.slice(0, 5).map((lap, index) => <Text key={`${lap}-${index}`} style={styles.lapText}>Lap {timer.laps.length - index}: {formatDuration(lap)}</Text>)}
             </View>

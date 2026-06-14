@@ -18,6 +18,7 @@ export const endpoints = {
     notifications: "/Notifications/me"
   },
   membership: "/Membership",
+  membershipPlans: "/MembershipPlans",
   branchAccess: "/member/branches/access",
   qrScan: "/Qr/scan",
   activeCheckIn: "/CheckIns/active",

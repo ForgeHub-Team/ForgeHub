@@ -4,6 +4,7 @@ import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 
 export type WorkoutTimerMode = "timer" | "countdown" | "laps";
+type ActiveWorkoutTimerMode = Exclude<WorkoutTimerMode, "laps">;
 
 interface StartTimerOptions {
   countdownDurationMs?: number;
@@ -17,7 +18,16 @@ interface WorkoutTimerState {
   startedAt: number | null;
   pausedAt: number | null;
   accumulatedElapsedMs: number;
+  timerIsRunning: boolean;
+  timerStartedAt: number | null;
+  timerPausedAt: number | null;
+  timerAccumulatedElapsedMs: number;
+  countdownIsRunning: boolean;
+  countdownStartedAt: number | null;
+  countdownPausedAt: number | null;
+  countdownAccumulatedElapsedMs: number;
   countdownDurationMs: number;
+  countdownCompleted: boolean;
   laps: number[];
   activeDrillId: string | null;
   activeWorkoutId: string | null;
@@ -38,12 +48,46 @@ const DEFAULT_COUNTDOWN_MS = 60_000;
 const COUNTDOWN_FINISHED_VIBRATION = [0, 250, 150, 250, 150, 250];
 let countdownCompletionTimeout: ReturnType<typeof setTimeout> | null = null;
 
-function getElapsedFromState(state: Pick<WorkoutTimerState, "accumulatedElapsedMs" | "isRunning" | "startedAt">) {
-  if (!state.isRunning || state.startedAt === null) {
-    return state.accumulatedElapsedMs;
+function normalizeMode(mode: WorkoutTimerMode): ActiveWorkoutTimerMode {
+  return mode === "laps" ? "timer" : mode;
+}
+
+function getRuntimeElapsed(accumulatedElapsedMs: number | null | undefined, isRunning: boolean | undefined, startedAt: number | null | undefined) {
+  const safeAccumulatedElapsedMs = Number.isFinite(accumulatedElapsedMs) ? Number(accumulatedElapsedMs) : 0;
+  if (!isRunning || startedAt == null) {
+    return safeAccumulatedElapsedMs;
   }
 
-  return Math.max(0, state.accumulatedElapsedMs + Date.now() - state.startedAt);
+  return Math.max(0, safeAccumulatedElapsedMs + Date.now() - startedAt);
+}
+
+function getTimerElapsedFromState(state: WorkoutTimerState) {
+  return getRuntimeElapsed(state.timerAccumulatedElapsedMs, state.timerIsRunning, state.timerStartedAt);
+}
+
+function getCountdownElapsedFromState(state: WorkoutTimerState) {
+  return getRuntimeElapsed(state.countdownAccumulatedElapsedMs, state.countdownIsRunning, state.countdownStartedAt);
+}
+
+function getActiveRuntimeState(state: WorkoutTimerState) {
+  const mode = normalizeMode(state.mode);
+  if (mode === "countdown") {
+    return {
+      isRunning: Boolean(state.countdownIsRunning),
+      startedAt: state.countdownStartedAt,
+      pausedAt: state.countdownPausedAt,
+      accumulatedElapsedMs: getCountdownElapsedFromState(state),
+      completed: state.countdownCompleted
+    };
+  }
+
+  return {
+    isRunning: Boolean(state.timerIsRunning),
+    startedAt: state.timerStartedAt,
+    pausedAt: state.timerPausedAt,
+    accumulatedElapsedMs: getTimerElapsedFromState(state),
+    completed: false
+  };
 }
 
 function clearCountdownCompletionTimeout() {
@@ -56,11 +100,12 @@ function clearCountdownCompletionTimeout() {
 function scheduleCountdownCompletion(state: WorkoutTimerState, complete: () => void) {
   clearCountdownCompletionTimeout();
 
-  if (state.mode !== "countdown" || !state.isRunning) {
+  if (!state.countdownIsRunning) {
     return;
   }
 
-  const remainingMs = Math.max(0, state.countdownDurationMs - getElapsedFromState(state));
+  const durationMs = Number.isFinite(state.countdownDurationMs) ? state.countdownDurationMs : DEFAULT_COUNTDOWN_MS;
+  const remainingMs = Math.max(0, durationMs - getCountdownElapsedFromState(state));
   if (remainingMs <= 0) {
     complete();
     return;
@@ -72,12 +117,21 @@ function scheduleCountdownCompletion(state: WorkoutTimerState, complete: () => v
 export const useWorkoutTimerStore = create<WorkoutTimerState>()(
   persist(
     (set, get) => ({
-      mode: "laps",
+      mode: "timer",
       isRunning: false,
       startedAt: null,
       pausedAt: null,
       accumulatedElapsedMs: 0,
+      timerIsRunning: false,
+      timerStartedAt: null,
+      timerPausedAt: null,
+      timerAccumulatedElapsedMs: 0,
+      countdownIsRunning: false,
+      countdownStartedAt: null,
+      countdownPausedAt: null,
+      countdownAccumulatedElapsedMs: 0,
       countdownDurationMs: DEFAULT_COUNTDOWN_MS,
+      countdownCompleted: false,
       laps: [],
       activeDrillId: null,
       activeWorkoutId: null,
@@ -85,110 +139,236 @@ export const useWorkoutTimerStore = create<WorkoutTimerState>()(
       startTimer: (mode, options) => {
         const now = Date.now();
         const durationMs = options?.countdownDurationMs;
+        const targetMode = normalizeMode(mode);
 
-        set((state) => ({
-          mode,
-          isRunning: true,
-          startedAt: now,
-          pausedAt: null,
-          accumulatedElapsedMs: state.mode === mode ? state.accumulatedElapsedMs : 0,
-          countdownDurationMs: mode === "countdown" && durationMs ? durationMs : state.countdownDurationMs,
-          activeDrillId: options?.activeDrillId ?? state.activeDrillId,
-          activeWorkoutId: options?.activeWorkoutId ?? state.activeWorkoutId,
-          completed: false
-        }));
+        set((state) => {
+          const nextState: WorkoutTimerState = {
+            ...state,
+            mode: targetMode,
+            activeDrillId: options?.activeDrillId ?? state.activeDrillId,
+            activeWorkoutId: options?.activeWorkoutId ?? state.activeWorkoutId
+          };
+
+          if (targetMode === "countdown") {
+            const hasNewDuration = typeof durationMs === "number" && Number.isFinite(durationMs);
+            nextState.countdownDurationMs = hasNewDuration ? Math.max(1000, durationMs) : state.countdownDurationMs ?? DEFAULT_COUNTDOWN_MS;
+            nextState.countdownAccumulatedElapsedMs = hasNewDuration || state.countdownCompleted ? 0 : state.countdownAccumulatedElapsedMs;
+            nextState.countdownIsRunning = true;
+            nextState.countdownStartedAt = now;
+            nextState.countdownPausedAt = null;
+            nextState.countdownCompleted = false;
+          } else {
+            nextState.timerIsRunning = true;
+            nextState.timerStartedAt = now;
+            nextState.timerPausedAt = null;
+          }
+
+          const activeRuntime = getActiveRuntimeState(nextState);
+          return {
+            ...nextState,
+            isRunning: activeRuntime.isRunning,
+            startedAt: activeRuntime.startedAt,
+            pausedAt: activeRuntime.pausedAt,
+            accumulatedElapsedMs: activeRuntime.accumulatedElapsedMs,
+            completed: activeRuntime.completed
+          };
+        });
         scheduleCountdownCompletion(get(), () => get().syncCountdownCompletion());
       },
       pauseTimer: () => {
         const state = get();
-        if (!state.isRunning) {
+        const targetMode = normalizeMode(state.mode);
+        const isActiveRunning = targetMode === "countdown" ? state.countdownIsRunning : state.timerIsRunning;
+        if (!isActiveRunning) {
           return;
         }
 
-        set({
-          isRunning: false,
-          startedAt: null,
-          pausedAt: Date.now(),
-          accumulatedElapsedMs: getElapsedFromState(state)
+        set((currentState) => {
+          const now = Date.now();
+          const nextState: WorkoutTimerState = {
+            ...currentState,
+            ...(targetMode === "countdown"
+              ? {
+                  countdownIsRunning: false,
+                  countdownStartedAt: null,
+                  countdownPausedAt: now,
+                  countdownAccumulatedElapsedMs: getCountdownElapsedFromState(currentState)
+                }
+              : {
+                  timerIsRunning: false,
+                  timerStartedAt: null,
+                  timerPausedAt: now,
+                  timerAccumulatedElapsedMs: getTimerElapsedFromState(currentState)
+                })
+          };
+          const activeRuntime = getActiveRuntimeState(nextState);
+          return {
+            ...nextState,
+            isRunning: activeRuntime.isRunning,
+            startedAt: activeRuntime.startedAt,
+            pausedAt: activeRuntime.pausedAt,
+            accumulatedElapsedMs: activeRuntime.accumulatedElapsedMs,
+            completed: activeRuntime.completed
+          };
         });
-        clearCountdownCompletionTimeout();
+        if (targetMode === "countdown") {
+          clearCountdownCompletionTimeout();
+        }
       },
       resumeTimer: () => {
         const state = get();
-        if (state.isRunning || state.completed) {
+        const targetMode = normalizeMode(state.mode);
+        const isActiveRunning = targetMode === "countdown" ? state.countdownIsRunning : state.timerIsRunning;
+        const isCompleted = targetMode === "countdown" && state.countdownCompleted;
+        if (isActiveRunning || isCompleted) {
           return;
         }
 
-        set({
-          isRunning: true,
-          startedAt: Date.now(),
-          pausedAt: null,
-          completed: false
+        set((currentState) => {
+          const nextState: WorkoutTimerState = {
+            ...currentState,
+            ...(targetMode === "countdown"
+              ? {
+                  countdownIsRunning: true,
+                  countdownStartedAt: Date.now(),
+                  countdownPausedAt: null,
+                  countdownCompleted: false
+                }
+              : {
+                  timerIsRunning: true,
+                  timerStartedAt: Date.now(),
+                  timerPausedAt: null
+                })
+          };
+          const activeRuntime = getActiveRuntimeState(nextState);
+          return {
+            ...nextState,
+            isRunning: activeRuntime.isRunning,
+            startedAt: activeRuntime.startedAt,
+            pausedAt: activeRuntime.pausedAt,
+            accumulatedElapsedMs: activeRuntime.accumulatedElapsedMs,
+            completed: activeRuntime.completed
+          };
         });
         scheduleCountdownCompletion(get(), () => get().syncCountdownCompletion());
       },
       resetTimer: () => {
-        clearCountdownCompletionTimeout();
-        set((state) => ({
-          isRunning: false,
-          startedAt: null,
-          pausedAt: null,
-          accumulatedElapsedMs: 0,
-          laps: [],
-          completed: false,
-          countdownDurationMs: state.countdownDurationMs
-        }));
+        const targetMode = normalizeMode(get().mode);
+        if (targetMode === "countdown") {
+          clearCountdownCompletionTimeout();
+        }
+
+        set((state) => {
+          const nextState: WorkoutTimerState = {
+            ...state,
+            ...(targetMode === "countdown"
+              ? {
+                  countdownIsRunning: false,
+                  countdownStartedAt: null,
+                  countdownPausedAt: null,
+                  countdownAccumulatedElapsedMs: 0,
+                  countdownCompleted: false
+                }
+              : {
+                  timerIsRunning: false,
+                  timerStartedAt: null,
+                  timerPausedAt: null,
+                  timerAccumulatedElapsedMs: 0,
+                  laps: []
+                })
+          };
+          const activeRuntime = getActiveRuntimeState(nextState);
+          return {
+            ...nextState,
+            isRunning: activeRuntime.isRunning,
+            startedAt: activeRuntime.startedAt,
+            pausedAt: activeRuntime.pausedAt,
+            accumulatedElapsedMs: activeRuntime.accumulatedElapsedMs,
+            completed: activeRuntime.completed
+          };
+        });
       },
       addLap: () => {
         const state = get();
-        if (!state.isRunning) {
+        if (!state.timerIsRunning) {
           return;
         }
 
-        set({ laps: [getElapsedFromState(state), ...state.laps] });
+        set({ laps: [getTimerElapsedFromState(state), ...state.laps] });
       },
       switchMode: (mode) => {
-        set({ mode });
+        const targetMode = normalizeMode(mode);
+        set((state) => {
+          const nextState = { ...state, mode: targetMode };
+          const activeRuntime = getActiveRuntimeState(nextState);
+          return {
+            ...nextState,
+            isRunning: activeRuntime.isRunning,
+            startedAt: activeRuntime.startedAt,
+            pausedAt: activeRuntime.pausedAt,
+            accumulatedElapsedMs: activeRuntime.accumulatedElapsedMs,
+            completed: activeRuntime.completed
+          };
+        });
         scheduleCountdownCompletion(get(), () => get().syncCountdownCompletion());
       },
       setCountdownDuration: (durationMs) => {
         clearCountdownCompletionTimeout();
-        set({
+        set((state) => ({
+          ...state,
           mode: "countdown",
           isRunning: false,
           startedAt: null,
           pausedAt: null,
           accumulatedElapsedMs: 0,
+          countdownIsRunning: false,
+          countdownStartedAt: null,
+          countdownPausedAt: null,
+          countdownAccumulatedElapsedMs: 0,
           countdownDurationMs: Math.max(1000, durationMs),
+          countdownCompleted: false,
           completed: false
-        });
+        }));
       },
-      getElapsedMs: () => getElapsedFromState(get()),
+      getElapsedMs: () => {
+        const state = get();
+        return normalizeMode(state.mode) === "countdown" ? getCountdownElapsedFromState(state) : getTimerElapsedFromState(state);
+      },
       getRemainingMs: () => {
         const state = get();
-        if (state.mode !== "countdown") {
-          return 0;
-        }
-
-        return Math.max(0, state.countdownDurationMs - getElapsedFromState(state));
+        const durationMs = Number.isFinite(state.countdownDurationMs) ? state.countdownDurationMs : DEFAULT_COUNTDOWN_MS;
+        return Math.max(0, durationMs - getCountdownElapsedFromState(state));
       },
       syncCountdownCompletion: () => {
         const state = get();
-        if (state.mode !== "countdown" || !state.isRunning) {
+        if (!state.countdownIsRunning) {
           return false;
         }
 
-        const remainingMs = Math.max(0, state.countdownDurationMs - getElapsedFromState(state));
+        const durationMs = Number.isFinite(state.countdownDurationMs) ? state.countdownDurationMs : DEFAULT_COUNTDOWN_MS;
+        const remainingMs = Math.max(0, durationMs - getCountdownElapsedFromState(state));
         if (remainingMs > 0) {
           return false;
         }
 
-        set({
-          isRunning: false,
-          startedAt: null,
-          pausedAt: Date.now(),
-          accumulatedElapsedMs: state.countdownDurationMs,
-          completed: true
+        set((currentState) => {
+          const nextState = {
+            ...currentState,
+            countdownIsRunning: false,
+            countdownStartedAt: null,
+            countdownPausedAt: Date.now(),
+            countdownAccumulatedElapsedMs: Number.isFinite(currentState.countdownDurationMs) ? currentState.countdownDurationMs : DEFAULT_COUNTDOWN_MS,
+            countdownCompleted: true
+          };
+          const activeRuntime = getActiveRuntimeState(nextState);
+          return {
+            ...nextState,
+            isRunning: activeRuntime.isRunning,
+            startedAt: activeRuntime.startedAt,
+            pausedAt: activeRuntime.pausedAt,
+            accumulatedElapsedMs: activeRuntime.accumulatedElapsedMs,
+            completed: activeRuntime.completed
+          };
         });
         clearCountdownCompletionTimeout();
         Vibration.vibrate(COUNTDOWN_FINISHED_VIBRATION);
@@ -204,7 +384,16 @@ export const useWorkoutTimerStore = create<WorkoutTimerState>()(
         startedAt: state.startedAt,
         pausedAt: state.pausedAt,
         accumulatedElapsedMs: state.accumulatedElapsedMs,
+        timerIsRunning: state.timerIsRunning,
+        timerStartedAt: state.timerStartedAt,
+        timerPausedAt: state.timerPausedAt,
+        timerAccumulatedElapsedMs: state.timerAccumulatedElapsedMs,
+        countdownIsRunning: state.countdownIsRunning,
+        countdownStartedAt: state.countdownStartedAt,
+        countdownPausedAt: state.countdownPausedAt,
+        countdownAccumulatedElapsedMs: state.countdownAccumulatedElapsedMs,
         countdownDurationMs: state.countdownDurationMs,
+        countdownCompleted: state.countdownCompleted,
         laps: state.laps,
         activeDrillId: state.activeDrillId,
         activeWorkoutId: state.activeWorkoutId,

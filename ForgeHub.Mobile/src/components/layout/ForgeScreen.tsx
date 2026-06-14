@@ -36,5 +36,5 @@ export function ForgeScreen({ title, subtitle, children, scroll = true, refreshi
 const styles = StyleSheet.create({
   safe: { flex: 1 },
   flex: { flex: 1 },
-  content: { padding: 20, gap: 16, paddingBottom: 120 }
+  content: { padding: 20, gap: 16, paddingBottom: 140 }
 });

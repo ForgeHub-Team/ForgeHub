@@ -6,6 +6,9 @@ export interface DashboardKpis {
   totalMembers?: number;
   activeMembers?: number;
   revenue?: number;
+  monthlyPlatformRevenue?: number;
+  pendingRevenue?: number;
+  latePayments?: number;
   todayAttendance?: number;
   classesToday?: number;
   expiringMemberships?: number;
