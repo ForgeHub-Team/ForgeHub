@@ -464,7 +464,7 @@ public class AdminController : ControllerBase
                 Level = "Info",
                 Time = log.CreatedAt?.ToLocalTime().ToString("HH:mm", CultureInfo.InvariantCulture) ?? string.Empty
             }).ToList(),
-            Dashboard = BuildDashboard(gyms, branches, members, payments, classes, todayCheckIns, subscriptionKpis)
+            Dashboard = BuildDashboard(gyms, branches, members, payments, classes, todayCheckIns, subscriptionKpis, subscriptions)
         };
 
         return Ok(workspace);
@@ -936,7 +936,8 @@ public class AdminController : ControllerBase
         IReadOnlyCollection<Payment> payments,
         IReadOnlyCollection<GymClass> classes,
         IReadOnlyCollection<CheckIn> todayCheckIns,
-        (decimal MonthlyPlatformRevenue, decimal PendingRevenue, int LatePayments) subscriptionKpis)
+        (decimal MonthlyPlatformRevenue, decimal PendingRevenue, int LatePayments) subscriptionKpis,
+        IReadOnlyCollection<GymSubscription> subscriptions)
     {
         var totalRevenue = payments.Sum(payment => payment.Amount ?? 0m);
         var revenueTrend = BuildDailyRevenueTrend(payments, 7);
@@ -951,6 +952,7 @@ public class AdminController : ControllerBase
             MonthlyPlatformRevenue = subscriptionKpis.MonthlyPlatformRevenue,
             PendingRevenue = subscriptionKpis.PendingRevenue,
             LatePayments = subscriptionKpis.LatePayments,
+            MonthlyPlatformRevenueRows = BuildMonthlyPlatformRevenueRows(subscriptions),
             RevenueTrend = revenueTrend,
             GymPerformance = gyms.Select(gym => new AdminBarPointDto
             {
@@ -996,6 +998,66 @@ public class AdminController : ControllerBase
             ActiveToday = todayCheckIns.Count.ToString(CultureInfo.InvariantCulture)
         };
         return dashboard;
+    }
+
+    private static List<AdminPlatformRevenueRowDto> BuildMonthlyPlatformRevenueRows(IReadOnlyCollection<GymSubscription> subscriptions)
+    {
+        var now = DateTime.UtcNow;
+        var today = DateOnly.FromDateTime(now);
+
+        return Enumerable.Range(0, 6)
+            .Select(offset =>
+            {
+                var date = new DateTime(now.Year, now.Month, 1, 0, 0, 0, DateTimeKind.Utc).AddMonths(-(5 - offset));
+                var nextMonth = date.AddMonths(1);
+                var monthStart = DateOnly.FromDateTime(date);
+                var nextMonthStart = DateOnly.FromDateTime(nextMonth);
+
+                var paidSubscriptions = subscriptions
+                    .Where(subscription =>
+                        subscription.PaidAt.HasValue &&
+                        subscription.PaidAt.Value >= date &&
+                        subscription.PaidAt.Value < nextMonth)
+                    .ToList();
+
+                var unpaidSubscriptions = subscriptions
+                    .Where(subscription =>
+                        !subscription.PaidAt.HasValue &&
+                        (subscription.Status == null || !subscription.Status.Equals("cancelled", StringComparison.OrdinalIgnoreCase)) &&
+                        subscription.DueDate >= monthStart &&
+                        subscription.DueDate < nextMonthStart &&
+                        (subscription.DueDate >= today ||
+                         (subscription.Status != null &&
+                          (subscription.Status.Equals("pending", StringComparison.OrdinalIgnoreCase) ||
+                           subscription.Status.Equals("due", StringComparison.OrdinalIgnoreCase) ||
+                           subscription.Status.Equals("notice", StringComparison.OrdinalIgnoreCase)))))
+                    .ToList();
+
+                var lockedGyms = subscriptions
+                    .Where(subscription =>
+                        subscription.LockedAt.HasValue &&
+                        subscription.LockedAt.Value >= date &&
+                        subscription.LockedAt.Value < nextMonth &&
+                        subscription.GymId.HasValue)
+                    .Select(subscription => subscription.GymId!.Value)
+                    .Distinct()
+                    .Count();
+
+                return new AdminPlatformRevenueRowDto
+                {
+                    Id = date.ToString("yyyy-MM", CultureInfo.InvariantCulture),
+                    Month = date.ToString("MMM yyyy", CultureInfo.InvariantCulture),
+                    PaidGyms = paidSubscriptions
+                        .Where(subscription => subscription.GymId.HasValue)
+                        .Select(subscription => subscription.GymId!.Value)
+                        .Distinct()
+                        .Count(),
+                    Revenue = paidSubscriptions.Sum(subscription => subscription.Amount ?? 0m),
+                    UnpaidAmount = unpaidSubscriptions.Sum(subscription => subscription.Amount ?? 0m),
+                    LockedGyms = lockedGyms
+                };
+            })
+            .ToList();
     }
 
     private async Task<(decimal MonthlyPlatformRevenue, decimal PendingRevenue, int LatePayments)> GetSubscriptionKpisAsync()

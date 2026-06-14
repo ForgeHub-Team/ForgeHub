@@ -588,11 +588,22 @@ public class AdminDashboardRoleDto
     public decimal MonthlyPlatformRevenue { get; set; }
     public decimal PendingRevenue { get; set; }
     public int LatePayments { get; set; }
+    public List<AdminPlatformRevenueRowDto> MonthlyPlatformRevenueRows { get; set; } = [];
     public string Conversion { get; set; } = "0%";
     public List<int> RevenueTrend { get; set; } = [];
     public List<AdminBarPointDto> GymPerformance { get; set; } = [];
     public List<AdminBarPointDto> BranchTrend { get; set; } = [];
     public List<AdminPiePointDto> AttendanceMix { get; set; } = [];
+}
+
+public class AdminPlatformRevenueRowDto
+{
+    public string Id { get; set; } = string.Empty;
+    public string Month { get; set; } = string.Empty;
+    public int PaidGyms { get; set; }
+    public decimal Revenue { get; set; }
+    public decimal UnpaidAmount { get; set; }
+    public int LockedGyms { get; set; }
 }
 
 public class AdminBarPointDto

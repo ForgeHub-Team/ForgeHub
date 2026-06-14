@@ -49,6 +49,12 @@ function amountTotal(payments: Payment[]) {
   }, 0);
 }
 
+function numberValue(value: unknown) {
+  if (typeof value === "number") return Number.isFinite(value) ? value : 0;
+  const parsed = Number(String(value ?? "").replace(/[^0-9.-]/g, ""));
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
 function monthlyPayments(payments: Payment[]) {
   return payments.filter((payment) => isThisMonth(payment.paidAt ?? null));
 }
@@ -170,6 +176,9 @@ function SuperAdminDashboard({ data }: { data: AdminWorkspace }) {
   const owners = data.users.filter((user) => user.role === "GymOwner");
   const newGymsThisMonth = countBy(data.gyms, (gym) => isThisMonth(gym.createdAt ?? null));
   const missingBranchData = data.branches.filter((branch) => !branch.capacity || !branch.lat || !branch.lng || !branch.rangeKm);
+  const monthlyPlatformRevenue = numberValue(data.dashboard?.platform?.monthlyPlatformRevenue);
+  const pendingRevenue = numberValue(data.dashboard?.platform?.pendingRevenue);
+  const latePayments = numberValue(data.dashboard?.platform?.latePayments);
 
   return (
     <>
@@ -184,6 +193,9 @@ function SuperAdminDashboard({ data }: { data: AdminWorkspace }) {
         <KpiCard label="Total Members Across Platform" value={members} />
         <KpiCard label="New Gyms This Month" value={newGymsThisMonth} />
         <KpiCard label="System Alerts" value={missingBranchData.length} />
+        <KpiCard label="Late Payments" value={latePayments} />
+        <KpiCard label="Monthly Platform Revenue" value={money(monthlyPlatformRevenue)} />
+        <KpiCard label="Pending Revenue" value={money(pendingRevenue)} />
       </div>
       <div className="mt-6 grid gap-6 xl:grid-cols-2">
         <DataTable title="Recent Gyms" rows={[...data.gyms].sort((a, b) => String(b.createdAt ?? "").localeCompare(String(a.createdAt ?? ""))).slice(0, 8)} columns={[{ key: "name", label: "Gym" }, { key: "ownerName", label: "Owner" }, { key: "branches", label: "Branches" }, { key: "createdAt", label: "Created", render: (row) => row.createdAt ? dateLabel(row.createdAt) : "Unknown" }, { key: "status", label: "Status", badge: true }]} />

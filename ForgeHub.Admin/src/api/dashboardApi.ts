@@ -29,6 +29,14 @@ export interface AdminWorkspace {
       monthlyPlatformRevenue?: number;
       pendingRevenue?: number;
       latePayments?: number;
+      monthlyPlatformRevenueRows?: {
+        id: string;
+        month: string;
+        paidGyms: number;
+        revenue: number;
+        unpaidAmount: number;
+        lockedGyms: number;
+      }[];
     };
   };
 }

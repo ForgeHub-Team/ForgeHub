@@ -392,17 +392,15 @@ function buildGymRows(data: AdminWorkspace): GymRiskRow[] {
   });
 }
 
-function buildRevenueRows(gymRows: GymRiskRow[]): RevenueRow[] {
-  const now = new Date();
-  return Array.from({ length: 6 }).map((_, index) => {
-    const date = new Date(now.getFullYear(), now.getMonth() - (5 - index), 1);
-    const paidGyms = gymRows.filter((row) => row.subscriptionStatus === "Paid").length;
-    const lateGyms = gymRows.filter((row) => ["Late", "Notice Period", "Locked"].includes(row.subscriptionStatus)).length;
-    const lockedGyms = gymRows.filter((row) => row.systemStatus === "Locked").length;
-    const revenue = gymRows.filter((row) => row.subscriptionStatus === "Paid").reduce((sum, row) => sum + row.monthlyRevenue, 0);
-    const unpaidAmount = lateGyms * expectedMonthlySubscription;
-    return { id: monthKey(date), month: monthLabel(monthKey(date)), paidGyms, revenue, unpaidAmount, lockedGyms };
-  });
+function buildRevenueRows(data: AdminWorkspace): RevenueRow[] {
+  return (data.dashboard?.platform?.monthlyPlatformRevenueRows ?? []).map((row) => ({
+    id: row.id,
+    month: row.month,
+    paidGyms: numberValue(row.paidGyms),
+    revenue: numberValue(row.revenue),
+    unpaidAmount: numberValue(row.unpaidAmount),
+    lockedGyms: numberValue(row.lockedGyms)
+  }));
 }
 
 function buildHealthRows(gymRows: GymRiskRow[], data: AdminWorkspace, revenueRows: RevenueRow[]): HealthRow[] {
@@ -464,7 +462,7 @@ export function SuperAdminDashboard() {
   const auditLogs = audit.data ?? [];
 
   const gymRows = useMemo(() => data ? buildGymRows(data) : [], [data]);
-  const revenueRows = useMemo(() => buildRevenueRows(gymRows), [gymRows]);
+  const revenueRows = useMemo(() => data ? buildRevenueRows(data) : [], [data]);
   const subscriptionRows = useMemo<SubscriptionRow[]>(() => gymRows.map((row) => ({
     id: row.id,
     gymName: row.gymName,
