@@ -39,6 +39,19 @@ function formatDay(value: string) {
   return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" }).format(new Date(`${value}T00:00:00`));
 }
 
+function count(value: unknown) {
+  const number = typeof value === "number" ? value : Number(value ?? 0);
+  return Math.round(Number.isFinite(number) ? number : 0).toLocaleString("en-US");
+}
+
+function tooltipValue(value: unknown, name: unknown) {
+  const label = String(name || "Value");
+  if (label.toLowerCase().includes("count")) return [count(value), label];
+  if (label.toLowerCase().includes("revenue") || label.toLowerCase().includes("payment")) return [money(value), label];
+  if (label.toLowerCase().includes("capacity") || label.toLowerCase().includes("percent")) return [percent(value), label];
+  return [count(value), label];
+}
+
 function exportRows(filename: string, rows: Record<string, unknown>[]) {
   if (!rows.length) return;
   const headers = Object.keys(rows[0]);
@@ -284,15 +297,15 @@ function DashboardContent({ data, reload }: { data: ManagerDashboard; reload: ()
         <Card>
           <SectionHeader title="Today's Attendance by Hour" onViewData={() => setPanel("attendance")} />
           <div className="h-72">
-            <ResponsiveContainer width="100%" height="100%">
+            {data.attendanceByHour.length ? <ResponsiveContainer width="100%" height="100%">
               <LineChart data={data.attendanceByHour}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="hour" />
                 <YAxis allowDecimals={false} />
-                <Tooltip />
+                <Tooltip formatter={(value: unknown) => [count(value), "Check-ins"]} />
                 <Line type="monotone" dataKey="checkIns" name="Check-ins" stroke="#EA580C" strokeWidth={3} dot={{ r: 4 }} />
               </LineChart>
-            </ResponsiveContainer>
+            </ResponsiveContainer> : <EmptyState title="No attendance data yet." />}
           </div>
           <div className="mt-3 flex flex-wrap gap-2">
             {data.attendanceByHour.filter((row) => row.checkIns > 0).map((row) => <Button key={row.hour} type="button" variant={selectedHour === row.hour ? "primary" : "secondary"} onClick={() => setSelectedHour(row.hour)}>{row.hour}</Button>)}
@@ -331,8 +344,8 @@ function DashboardContent({ data, reload }: { data: ManagerDashboard; reload: ()
             <div className="rounded-xl bg-slate-50 p-3"><span className="text-sm text-forge-muted">Day Pass</span><strong className="block text-xl">{money(data.paymentsToday.dayPassRevenue)}</strong></div>
           </div>
           <div className="mt-4 grid gap-4 lg:grid-cols-2">
-            <div className="h-56"><ResponsiveContainer width="100%" height="100%"><BarChart data={data.paymentsByMethod}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="name" /><YAxis /><Tooltip formatter={(value: unknown) => money(value)} /><Bar dataKey="revenue" fill="#2563EB" radius={[6, 6, 0, 0]} /></BarChart></ResponsiveContainer></div>
-            <div className="h-56"><ResponsiveContainer width="100%" height="100%"><BarChart data={data.paymentsByPlan}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="name" /><YAxis /><Tooltip formatter={(value: unknown) => money(value)} /><Bar dataKey="revenue" fill="#16A34A" radius={[6, 6, 0, 0]} /></BarChart></ResponsiveContainer></div>
+            <div className="h-56">{data.paymentsByMethod.length ? <ResponsiveContainer width="100%" height="100%"><BarChart data={data.paymentsByMethod}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="name" /><YAxis /><Tooltip formatter={tooltipValue} /><Bar dataKey="revenue" name="Revenue" fill="#2563EB" radius={[6, 6, 0, 0]} /><Bar dataKey="count" name="Payment Count" fill="#EA580C" radius={[6, 6, 0, 0]} /></BarChart></ResponsiveContainer> : <EmptyState title="No payment method data yet." />}</div>
+            <div className="h-56">{data.paymentsByPlan.length ? <ResponsiveContainer width="100%" height="100%"><BarChart data={data.paymentsByPlan}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="name" /><YAxis /><Tooltip formatter={tooltipValue} /><Bar dataKey="revenue" name="Revenue" fill="#16A34A" radius={[6, 6, 0, 0]} /><Bar dataKey="count" name="Payment Count" fill="#2563EB" radius={[6, 6, 0, 0]} /></BarChart></ResponsiveContainer> : <EmptyState title="No payment plan data yet." />}</div>
           </div>
         </Card>
 
@@ -390,9 +403,9 @@ function DashboardContent({ data, reload }: { data: ManagerDashboard; reload: ()
           {(["today", "7d", "month"] as ReportRange[]).map((item) => <Button key={item} type="button" variant={reportRange === item ? "primary" : "secondary"} onClick={() => setReportRange(item)}>{item === "today" ? "Today" : item === "7d" ? "Last 7 Days" : "This Month"}</Button>)}
         </div>
         <div className="grid gap-6 xl:grid-cols-3">
-          <div className="h-64"><ResponsiveContainer width="100%" height="100%"><LineChart data={reportRows}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="date" tickFormatter={formatDay} /><YAxis allowDecimals={false} /><Tooltip labelFormatter={(value: unknown) => formatDay(String(value))} /><Line dataKey="count" name="Attendance by day" stroke="#EA580C" strokeWidth={3} /></LineChart></ResponsiveContainer></div>
-          <div className="h-64"><ResponsiveContainer width="100%" height="100%"><BarChart data={data.branchReports.revenueByDay}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="date" tickFormatter={formatDay} /><YAxis /><Tooltip formatter={(value: unknown) => money(value)} labelFormatter={(value: unknown) => formatDay(String(value))} /><Bar dataKey="revenue" name="Revenue by day" fill="#2563EB" radius={[6, 6, 0, 0]} /></BarChart></ResponsiveContainer></div>
-          <div className="h-64"><ResponsiveContainer width="100%" height="100%"><BarChart data={data.branchReports.paymentsByMethod}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="name" /><YAxis /><Tooltip formatter={(value: unknown) => money(value)} /><Bar dataKey="revenue" name="Payments by method" fill="#16A34A" radius={[6, 6, 0, 0]} /></BarChart></ResponsiveContainer></div>
+          <div className="h-64">{reportRows.length ? <ResponsiveContainer width="100%" height="100%"><LineChart data={reportRows}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="date" tickFormatter={formatDay} /><YAxis allowDecimals={false} /><Tooltip formatter={(value: unknown) => [count(value), "Attendance"]} labelFormatter={(value: unknown) => formatDay(String(value))} /><Line dataKey="count" name="Attendance" stroke="#EA580C" strokeWidth={3} /></LineChart></ResponsiveContainer> : <EmptyState title="No attendance report data yet." />}</div>
+          <div className="h-64">{data.branchReports.revenueByDay.length ? <ResponsiveContainer width="100%" height="100%"><BarChart data={data.branchReports.revenueByDay}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="date" tickFormatter={formatDay} /><YAxis /><Tooltip formatter={tooltipValue} labelFormatter={(value: unknown) => formatDay(String(value))} /><Bar dataKey="revenue" name="Revenue" fill="#2563EB" radius={[6, 6, 0, 0]} /></BarChart></ResponsiveContainer> : <EmptyState title="No revenue report data yet." />}</div>
+          <div className="h-64">{data.branchReports.paymentsByMethod.length ? <ResponsiveContainer width="100%" height="100%"><BarChart data={data.branchReports.paymentsByMethod}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="name" /><YAxis /><Tooltip formatter={tooltipValue} /><Bar dataKey="revenue" name="Revenue" fill="#16A34A" radius={[6, 6, 0, 0]} /><Bar dataKey="count" name="Payment Count" fill="#2563EB" radius={[6, 6, 0, 0]} /></BarChart></ResponsiveContainer> : <EmptyState title="No payment report data yet." />}</div>
         </div>
       </Card>
 

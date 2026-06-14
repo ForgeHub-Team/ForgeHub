@@ -26,6 +26,43 @@ function dayLabel(value: string) {
   return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" }).format(new Date(`${value}T00:00:00`));
 }
 
+function count(value: unknown) {
+  const number = typeof value === "number" ? value : Number(value ?? 0);
+  return Math.round(Number.isFinite(number) ? number : 0).toLocaleString("en-US");
+}
+
+function tooltipValue(value: unknown, name: unknown) {
+  const label = String(name || "Value");
+  if (label.toLowerCase().includes("percentage") || label.toLowerCase().includes("rate")) return [percent(value), label];
+  return [count(value), label];
+}
+
+function labelForKey(key: string) {
+  const labels: Record<string, string> = {
+    className: "Class Name",
+    booked: "Booked",
+    attended: "Attended",
+    attendancePercentage: "Attendance Percentage",
+    date: "Date",
+    classes: "Classes",
+    bookedMembers: "Booked Members",
+    attendedMembers: "Attended Members",
+    memberId: "Member ID",
+    memberName: "Member Name",
+    lastSessionDate: "Last Session",
+    sessionsThisMonth: "Sessions This Month",
+    status: "Status"
+  };
+  return labels[key] ?? key.replace(/([A-Z])/g, " $1").replace(/^./, (letter) => letter.toUpperCase());
+}
+
+function displayCell(key: string, value: unknown) {
+  if (key.toLowerCase().includes("percentage")) return percent(value);
+  if (key.toLowerCase().includes("date") && value) return dateLabel(String(value));
+  if (typeof value === "number") return count(value);
+  return String(value ?? "Not set");
+}
+
 function Kpi({ label, value, meta }: { label: string; value: React.ReactNode; meta: string }) {
   return (
     <Card>
@@ -44,10 +81,10 @@ function ViewDataModal({ title, rows, onClose }: { title: string; rows: Record<s
         <div className="max-h-[70vh] overflow-auto">
           <table className="min-w-full text-left text-sm">
             <thead className="bg-slate-50 text-xs uppercase tracking-wide text-forge-muted">
-              <tr>{keys.map((key) => <th key={key} className="px-3 py-3">{key}</th>)}</tr>
+              <tr>{keys.map((key) => <th key={key} className="px-3 py-3">{labelForKey(key)}</th>)}</tr>
             </thead>
             <tbody className="divide-y divide-forge-border">
-              {rows.map((row, index) => <tr key={index}>{keys.map((key) => <td key={key} className="px-3 py-3">{String(row[key] ?? "Not set")}</td>)}</tr>)}
+              {rows.map((row, index) => <tr key={index}>{keys.map((key) => <td key={key} className="px-3 py-3">{displayCell(key, row[key])}</td>)}</tr>)}
             </tbody>
           </table>
         </div>
@@ -277,9 +314,64 @@ function Dashboard({ data, reload }: { data: TrainerDashboard; reload: () => voi
           <Button type="button" variant="secondary" onClick={() => setViewData({ title: "Weekly Class Attendance", rows: data.coachingInsights.weeklyClassAttendance as unknown as Record<string, unknown>[] })}><Eye size={16} /> View Data</Button>
         </div>
         <div className="grid gap-6 xl:grid-cols-3">
-          <div className="h-64"><ResponsiveContainer width="100%" height="100%"><BarChart data={data.coachingInsights.weeklyClassAttendance}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="className" /><YAxis /><Tooltip /><Bar dataKey="booked" fill="#2563EB" /><Bar dataKey="attended" fill="#16A34A" /></BarChart></ResponsiveContainer></div>
-          <div className="h-64"><ResponsiveContainer width="100%" height="100%"><LineChart data={data.coachingInsights.attendanceTrend}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="date" tickFormatter={dayLabel} /><YAxis /><Tooltip /><Line dataKey="bookedMembers" stroke="#EA580C" strokeWidth={3} /><Line dataKey="attendedMembers" stroke="#16A34A" strokeWidth={3} /></LineChart></ResponsiveContainer></div>
-          <div className="h-64"><ResponsiveContainer width="100%" height="100%"><BarChart data={data.coachingInsights.assignedMemberActivity}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="memberName" /><YAxis /><Tooltip /><Bar dataKey="sessionsThisMonth" fill="#0F766E" /></BarChart></ResponsiveContainer></div>
+          <div>
+            <div className="mb-2 flex justify-end">
+              <Button type="button" variant="ghost" onClick={() => setViewData({ title: "Weekly Class Attendance", rows: data.coachingInsights.weeklyClassAttendance as unknown as Record<string, unknown>[] })}><Eye size={16} /> View Data</Button>
+            </div>
+            <div className="h-64">
+              {data.coachingInsights.weeklyClassAttendance.length ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={data.coachingInsights.weeklyClassAttendance}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="className" />
+                    <YAxis allowDecimals={false} />
+                    <Tooltip formatter={tooltipValue} />
+                    <Bar dataKey="booked" name="Booked" fill="#2563EB" />
+                    <Bar dataKey="attended" name="Attended" fill="#16A34A" />
+                    <Bar dataKey="attendancePercentage" name="Attendance Percentage" fill="#EA580C" />
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : <EmptyState title="No weekly class attendance yet." />}
+            </div>
+          </div>
+          <div>
+            <div className="mb-2 flex justify-end">
+              <Button type="button" variant="ghost" onClick={() => setViewData({ title: "Attendance Trend", rows: data.coachingInsights.attendanceTrend as unknown as Record<string, unknown>[] })}><Eye size={16} /> View Data</Button>
+            </div>
+            <div className="h-64">
+              {data.coachingInsights.attendanceTrend.length ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={data.coachingInsights.attendanceTrend}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="date" tickFormatter={dayLabel} />
+                    <YAxis allowDecimals={false} />
+                    <Tooltip formatter={tooltipValue} labelFormatter={(label: unknown) => dayLabel(String(label))} />
+                    <Line dataKey="bookedMembers" name="Booked Members" stroke="#EA580C" strokeWidth={3} />
+                    <Line dataKey="attendedMembers" name="Attended Members" stroke="#16A34A" strokeWidth={3} />
+                    <Line dataKey="classes" name="Classes" stroke="#2563EB" strokeWidth={2} />
+                  </LineChart>
+                </ResponsiveContainer>
+              ) : <EmptyState title="No attendance trend yet." />}
+            </div>
+          </div>
+          <div>
+            <div className="mb-2 flex justify-end">
+              <Button type="button" variant="ghost" onClick={() => setViewData({ title: "Assigned Member Activity", rows: data.coachingInsights.assignedMemberActivity as unknown as Record<string, unknown>[] })}><Eye size={16} /> View Data</Button>
+            </div>
+            <div className="h-64">
+              {data.coachingInsights.assignedMemberActivity.length ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={data.coachingInsights.assignedMemberActivity}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="memberName" />
+                    <YAxis allowDecimals={false} />
+                    <Tooltip formatter={tooltipValue} />
+                    <Bar dataKey="sessionsThisMonth" name="Sessions This Month" fill="#0F766E" />
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : <EmptyState title="No assigned member activity yet." />}
+            </div>
+          </div>
         </div>
         <p className="mt-3 text-sm text-forge-muted">Attendance percentages use real booked and attended class booking records. {data.coachingInsights.weeklyClassAttendance[0] ? `Top class attendance: ${percent(data.coachingInsights.weeklyClassAttendance[0].attendancePercentage)}.` : ""}</p>
       </Card>

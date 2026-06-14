@@ -66,12 +66,15 @@ public class ManagerDashboardController : ControllerBase
             .Where(checkIn => checkIn.BranchId == branchId && checkIn.CheckInTime >= reportStart)
             .AsNoTracking()
             .ToListAsync();
+        var openCheckIns = await _context.CheckIns
+            .Include(checkIn => checkIn.Member)
+            .Where(checkIn => checkIn.BranchId == branchId && !checkIn.CheckOutTime.HasValue)
+            .AsNoTracking()
+            .ToListAsync();
         var todaysCheckIns = checkIns
             .Where(checkIn => checkIn.CheckInTime >= todayStart && checkIn.CheckInTime < tomorrowStart)
             .ToList();
-        var currentCheckIns = checkIns
-            .Where(checkIn => !checkIn.CheckOutTime.HasValue && checkIn.CheckInTime >= reportStart)
-            .ToList();
+        var currentCheckIns = openCheckIns;
 
         var payments = await _context.Payments
             .Include(payment => payment.Member)

@@ -46,6 +46,18 @@ function formatDay(value: string) {
   return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" }).format(new Date(`${value}T00:00:00`));
 }
 
+function count(value: unknown) {
+  const number = typeof value === "number" ? value : Number(value ?? 0);
+  return Math.round(Number.isFinite(number) ? number : 0).toLocaleString("en-US");
+}
+
+function tooltipValue(value: unknown, name: unknown) {
+  const label = String(name);
+  if (label.toLowerCase().includes("revenue") || label.toLowerCase().includes("price")) return [money(value), label];
+  if (label.toLowerCase().includes("capacity") || label.toLowerCase().includes("percent")) return [percent(value), label];
+  return [count(value), label];
+}
+
 function exportRows(filename: string, rows: Record<string, unknown>[]) {
   if (!rows.length) return;
   const headers = Object.keys(rows[0]);
@@ -301,15 +313,16 @@ function DashboardContent({ data }: { data: OwnerDashboard }) {
             ))}
           </div>
           <div className="h-72">
-            <ResponsiveContainer width="100%" height="100%">
+            {revenueRows.length ? <ResponsiveContainer width="100%" height="100%">
               <LineChart data={revenueRows}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="date" tickFormatter={formatDay} />
                 <YAxis tickFormatter={(value: number) => `$${value}`} />
-                <Tooltip labelFormatter={(label: unknown) => formatDay(String(label))} formatter={(value: unknown) => money(value)} />
+                <Tooltip labelFormatter={(label: unknown) => formatDay(String(label))} formatter={tooltipValue} />
                 <Line type="monotone" dataKey="revenue" name="Revenue" stroke="#EA580C" strokeWidth={3} dot={{ r: 4 }} />
+                <Line type="monotone" dataKey="paymentCount" name="Payment Count" stroke="#2563EB" strokeWidth={2} dot={{ r: 3 }} />
               </LineChart>
-            </ResponsiveContainer>
+            </ResponsiveContainer> : <EmptyState title="No revenue trend data yet." />}
           </div>
           <div className="mt-3 flex flex-wrap gap-2">
             {revenueRows.map((row) => (
@@ -368,39 +381,41 @@ function DashboardContent({ data }: { data: OwnerDashboard }) {
             <option value="capacityPercent">Capacity percentage by branch</option>
           </select>
           <div className="h-72">
-            <ResponsiveContainer width="100%" height="100%">
+            {data.branchPerformance.length ? <ResponsiveContainer width="100%" height="100%">
               <BarChart data={data.branchPerformance}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="branch" />
                 <YAxis />
-                <Tooltip formatter={(value: unknown) => branchMetric === "revenue" ? money(value) : branchMetric === "capacityPercent" ? percent(value) : value} />
+                <Tooltip formatter={tooltipValue} />
                 <Bar dataKey={branchMetric} name={branchMetricLabel} fill="#2563EB" radius={[6, 6, 0, 0]} />
               </BarChart>
-            </ResponsiveContainer>
+            </ResponsiveContainer> : <EmptyState title="No branch performance data yet." />}
           </div>
         </Card>
 
         <Card>
           <SectionHeader title="Members by Branch" onViewData={() => setPanel("members")} />
           <div className="h-72">
-            <ResponsiveContainer width="100%" height="100%">
+            {data.membersByBranch.length ? <ResponsiveContainer width="100%" height="100%">
               {membersChartAsPie ? (
                 <PieChart>
                   <Pie data={data.membersByBranch} dataKey="totalMembers" nameKey="branch" innerRadius={64} outerRadius={105}>
                     {data.membersByBranch.map((row, index) => <Cell key={row.branchId} fill={palette[index % palette.length]} />)}
                   </Pie>
-                  <Tooltip />
+                  <Tooltip formatter={(value: unknown) => [count(value), "Total Members"]} />
                 </PieChart>
               ) : (
                 <BarChart data={data.membersByBranch}>
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="branch" />
                   <YAxis allowDecimals={false} />
-                  <Tooltip />
+                  <Tooltip formatter={tooltipValue} />
                   <Bar dataKey="totalMembers" name="Total Members" fill="#16A34A" radius={[6, 6, 0, 0]} />
+                  <Bar dataKey="activeMembers" name="Active Members" fill="#2563EB" radius={[6, 6, 0, 0]} />
+                  <Bar dataKey="expiredMembers" name="Expired Members" fill="#DC2626" radius={[6, 6, 0, 0]} />
                 </BarChart>
               )}
-            </ResponsiveContainer>
+            </ResponsiveContainer> : <EmptyState title="No member branch data yet." />}
           </div>
         </Card>
 
@@ -414,7 +429,7 @@ function DashboardContent({ data }: { data: OwnerDashboard }) {
                     <Cell fill="#16A34A" />
                     <Cell fill="#DC2626" />
                   </Pie>
-                  <Tooltip />
+                  <Tooltip formatter={(value: unknown, name: unknown) => [count(value), String(name)]} />
                 </PieChart>
               </ResponsiveContainer>
             </div>
@@ -454,8 +469,9 @@ function DashboardContent({ data }: { data: OwnerDashboard }) {
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="name" />
                   <YAxis />
-                  <Tooltip formatter={(value: unknown) => money(value)} />
+                  <Tooltip formatter={tooltipValue} />
                   <Bar dataKey="revenue" name="Revenue by payment method" fill="#0F766E" radius={[6, 6, 0, 0]} />
+                  <Bar dataKey="count" name="Payment Count" fill="#2563EB" radius={[6, 6, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -465,7 +481,7 @@ function DashboardContent({ data }: { data: OwnerDashboard }) {
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="date" tickFormatter={formatDay} />
                   <YAxis allowDecimals={false} />
-                  <Tooltip labelFormatter={(label: unknown) => formatDay(String(label))} />
+                  <Tooltip labelFormatter={(label: unknown) => formatDay(String(label))} formatter={tooltipValue} />
                   <Line dataKey="count" name="Payment count" stroke="#EA580C" strokeWidth={3} />
                 </LineChart>
               </ResponsiveContainer>
@@ -477,8 +493,9 @@ function DashboardContent({ data }: { data: OwnerDashboard }) {
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="name" />
                 <YAxis />
-                <Tooltip formatter={(value: unknown) => money(value)} />
+                <Tooltip formatter={tooltipValue} />
                 <Bar dataKey="revenue" name="Revenue by membership plan" fill="#7C3AED" radius={[6, 6, 0, 0]} />
+                <Bar dataKey="count" name="Payment Count" fill="#2563EB" radius={[6, 6, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -492,7 +509,7 @@ function DashboardContent({ data }: { data: OwnerDashboard }) {
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="planName" />
                 <YAxis allowDecimals={false} />
-                <Tooltip formatter={(value: unknown, name: unknown) => name === "Total Revenue" ? money(value) : value} />
+                <Tooltip formatter={tooltipValue} />
                 <Bar dataKey="salesCount" name="Sales Count" fill="#2563EB" radius={[6, 6, 0, 0]} />
                 <Bar dataKey="totalRevenue" name="Total Revenue" fill="#EA580C" radius={[6, 6, 0, 0]} />
               </BarChart>

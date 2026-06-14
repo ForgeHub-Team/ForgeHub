@@ -1,2 +1,5 @@
-import { DashboardView } from "../shared/DashboardView";
-export function TrainerDashboard() { return <DashboardView />; }
+import { TrainerTodayPage } from "./TrainerTodayPage";
+
+export function TrainerDashboard() {
+  return <TrainerTodayPage />;
+}

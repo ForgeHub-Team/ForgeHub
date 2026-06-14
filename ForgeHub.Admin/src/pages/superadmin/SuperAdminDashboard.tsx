@@ -100,7 +100,6 @@ interface AuditRow {
 }
 
 const chartColors = ["#16A34A", "#94A3B8", "#DC2626", "#7F1D1D", "#F59E0B"];
-const expectedMonthlySubscription = 250;
 
 function parseDate(value?: string | null) {
   if (!value) return null;
@@ -132,6 +131,17 @@ function numberValue(value: unknown) {
   if (typeof value === "number") return Number.isFinite(value) ? value : 0;
   const parsed = Number(String(value ?? "").replace(/[^0-9.-]/g, ""));
   return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function count(value: unknown) {
+  return Math.round(numberValue(value)).toLocaleString("en-US");
+}
+
+function chartTooltip(formatters: Record<string, (value: unknown) => string> = {}) {
+  return (value: unknown, name: unknown) => {
+    const label = String(name);
+    return [formatters[label]?.(value) ?? count(value), label];
+  };
 }
 
 function lower(value: unknown) {
@@ -374,7 +384,7 @@ function buildGymRows(data: AdminWorkspace): GymRiskRow[] {
     const due = parseDate(dueDate);
     const daysLate = status === "Late" || status === "Notice Period" || status === "Locked" ? Math.max(0, due ? daysBetween(new Date(), due) : 0) : 0;
     const lastPayment = paymentsByGym.get(gym.id);
-    const monthlyRevenue = numberValue(subscription?.amount) || numberValue(gym.monthlyRevenue) || lastPayment?.amount || expectedMonthlySubscription;
+    const monthlyRevenue = numberValue(subscription?.amount) || numberValue(gym.monthlyRevenue) || lastPayment?.amount || 0;
     return {
       id: gym.id,
       gymName: cleanLabel(gym.name, "Gym"),
@@ -418,7 +428,7 @@ function buildHealthRows(gymRows: GymRiskRow[], data: AdminWorkspace, revenueRow
       const created = parseDate(gym.createdAt);
       return !created || created <= keyDate;
     }).length || data.gyms.length;
-    const expectedRevenue = Math.max(totalGyms, gymRows.length) * expectedMonthlySubscription;
+    const expectedRevenue = row.revenue + row.unpaidAmount;
     return {
       id: row.id,
       month: row.month,
@@ -545,44 +555,45 @@ export function SuperAdminDashboard() {
         <Card>
           <SectionHeader title="Gym Status" onViewData={() => setActivePanel("gym-status")} />
           <div className="h-72">
-            <ResponsiveContainer width="100%" height="100%">
+            {gymStatusChart.some((row) => row.value > 0) ? <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie data={gymStatusChart} innerRadius={70} outerRadius={105} paddingAngle={3} dataKey="value" nameKey="name">
                   {gymStatusChart.map((entry, index) => <Cell key={entry.name} fill={chartColors[index]} />)}
                 </Pie>
-                <Tooltip formatter={(value: unknown) => [value, "Gyms"]} />
+                <Tooltip formatter={(value: unknown, name: unknown) => [count(value), String(name)]} />
               </PieChart>
-            </ResponsiveContainer>
+            </ResponsiveContainer> : <EmptyState title="No gym status data yet." />}
           </div>
         </Card>
 
         <Card>
           <SectionHeader title="Monthly Platform Revenue" onViewData={() => setActivePanel("revenue")} />
           <div className="h-72">
-            <ResponsiveContainer width="100%" height="100%">
+            {revenueRows.length ? <ResponsiveContainer width="100%" height="100%">
               <LineChart data={revenueRows}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="month" />
                 <YAxis tickFormatter={(value: number) => `$${value}`} />
-                <Tooltip formatter={(value: unknown) => money(value)} />
+                <Tooltip formatter={chartTooltip({ Revenue: money, "Unpaid Amount": money, "Paid Gyms": count, "Locked Gyms": count })} />
                 <Line type="monotone" dataKey="revenue" name="Revenue" stroke="#EA580C" strokeWidth={3} dot={{ r: 4 }} />
+                <Line type="monotone" dataKey="unpaidAmount" name="Unpaid Amount" stroke="#7F1D1D" strokeWidth={2} dot={{ r: 3 }} />
               </LineChart>
-            </ResponsiveContainer>
+            </ResponsiveContainer> : <EmptyState title="No subscription revenue data yet." />}
           </div>
         </Card>
 
         <Card>
           <SectionHeader title="Subscription Payment Status" onViewData={() => setActivePanel("subscriptions")} />
           <div className="h-72">
-            <ResponsiveContainer width="100%" height="100%">
+            {subscriptionChart.some((row) => row.gyms > 0) ? <ResponsiveContainer width="100%" height="100%">
               <BarChart data={subscriptionChart}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="status" />
                 <YAxis allowDecimals={false} />
-                <Tooltip />
+                <Tooltip formatter={(value: unknown) => [count(value), "Gyms"]} />
                 <Bar dataKey="gyms" name="Gyms" fill="#2563EB" radius={[6, 6, 0, 0]} />
               </BarChart>
-            </ResponsiveContainer>
+            </ResponsiveContainer> : <EmptyState title="No subscription status data yet." />}
           </div>
         </Card>
 
@@ -595,7 +606,7 @@ export function SuperAdminDashboard() {
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="action" />
                   <YAxis allowDecimals={false} />
-                  <Tooltip />
+                  <Tooltip formatter={(value: unknown) => [count(value), "Audit events"]} />
                   <Bar dataKey="count" name="Events" fill="#0F766E" radius={[6, 6, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
@@ -645,28 +656,28 @@ export function SuperAdminDashboard() {
         <SectionHeader title="Platform Health" onViewData={() => setActivePanel("health")} />
         <div className="grid gap-6 xl:grid-cols-2">
           <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
+            {healthRows.length ? <ResponsiveContainer width="100%" height="100%">
               <LineChart data={healthRows}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="month" />
                 <YAxis allowDecimals={false} />
-                <Tooltip />
+                <Tooltip formatter={chartTooltip({ "Active Gyms Over Time": count, "New Gyms Created Per Month": count })} />
                 <Line dataKey="totalGyms" name="Active Gyms Over Time" stroke="#2563EB" strokeWidth={3} />
                 <Line dataKey="newGyms" name="New Gyms Created Per Month" stroke="#16A34A" strokeWidth={3} />
               </LineChart>
-            </ResponsiveContainer>
+            </ResponsiveContainer> : <EmptyState title="No platform health data yet." />}
           </div>
           <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
+            {healthRows.length ? <ResponsiveContainer width="100%" height="100%">
               <LineChart data={healthRows}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="month" />
                 <YAxis tickFormatter={(value: number) => `${value}%`} />
-                <Tooltip formatter={(value: unknown, name: unknown) => name === "Revenue Collection Rate" ? percent(value) : value} />
+                <Tooltip formatter={chartTooltip({ "Revenue Collection Rate": percent, "Locked Gyms Over Time": count })} />
                 <Line dataKey="lockedGyms" name="Locked Gyms Over Time" stroke="#7F1D1D" strokeWidth={3} />
                 <Line dataKey="collectionRate" name="Revenue Collection Rate" stroke="#EA580C" strokeWidth={3} />
               </LineChart>
-            </ResponsiveContainer>
+            </ResponsiveContainer> : <EmptyState title="No platform health data yet." />}
           </div>
         </div>
       </Card>

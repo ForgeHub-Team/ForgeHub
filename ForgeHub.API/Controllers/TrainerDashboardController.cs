@@ -53,10 +53,6 @@ public class TrainerDashboardController : ControllerBase
             .AsNoTracking()
             .ToListAsync();
         var assignedMemberIds = sessions.Where(item => item.MemberId.HasValue).Select(item => item.MemberId!.Value).ToHashSet();
-        foreach (var memberId in bookings.Where(item => item.MemberId.HasValue).Select(item => item.MemberId!.Value))
-        {
-            assignedMemberIds.Add(memberId);
-        }
 
         var members = await _context.Members
             .Where(member => assignedMemberIds.Contains(member.Id))
