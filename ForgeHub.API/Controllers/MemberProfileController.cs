@@ -3,6 +3,7 @@ using System.Text.RegularExpressions;
 using ForgeHub.API.Data;
 using ForgeHub.API.DTOs;
 using ForgeHub.API.Models;
+using ForgeHub.API.Security;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -15,6 +16,7 @@ namespace ForgeHub.API.Controllers;
 public class MemberProfileController : ControllerBase
 {
     private static readonly HashSet<string> BloodTypes = ["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"];
+    private static readonly HashSet<string> AllowedImageExtensions = [".jpg", ".jpeg", ".png", ".heic", ".webp"];
     private readonly ApplicationDbContext _context;
 
     public MemberProfileController(ApplicationDbContext context)
@@ -57,6 +59,60 @@ public class MemberProfileController : ControllerBase
         return Ok(ToDto(profile));
     }
 
+    [HttpPost("photo")]
+    [RequestSizeLimit(5_000_000)]
+    public async Task<IActionResult> UploadPhoto(IFormFile? file)
+    {
+        if (file == null || file.Length == 0)
+        {
+            return BadRequest(new { message = "Please choose a profile photo to upload." });
+        }
+
+        var extension = Path.GetExtension(file.FileName).ToLowerInvariant();
+        if (!AllowedImageExtensions.Contains(extension))
+        {
+            return BadRequest(new { message = "Profile photo must be JPG, PNG, HEIC, or WEBP." });
+        }
+
+        var member = await GetCurrentMember();
+        if (member == null)
+        {
+            return NotFound(new { message = "Member profile not found." });
+        }
+
+        var uploadRoot = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads", "members");
+        Directory.CreateDirectory(uploadRoot);
+        var fileName = $"{member.Id}-{Guid.NewGuid():N}{extension}";
+        var filePath = Path.Combine(uploadRoot, fileName);
+        await using (var stream = System.IO.File.Create(filePath))
+        {
+            await file.CopyToAsync(stream);
+        }
+
+        var profile = await GetOrCreateProfile(member.Id);
+        profile.ProfilePhotoUrl = $"/uploads/members/{fileName}";
+        profile.UpdatedAt = DateTime.UtcNow;
+        await _context.SaveChangesAsync();
+
+        return Ok(ToDto(profile));
+    }
+
+    [HttpDelete("photo")]
+    public async Task<IActionResult> RemovePhoto()
+    {
+        var member = await GetCurrentMember();
+        if (member == null)
+        {
+            return NotFound(new { message = "Member profile not found." });
+        }
+
+        var profile = await GetOrCreateProfile(member.Id);
+        profile.ProfilePhotoUrl = null;
+        profile.UpdatedAt = DateTime.UtcNow;
+        await _context.SaveChangesAsync();
+        return Ok(ToDto(profile));
+    }
+
     [HttpGet("insights")]
     public async Task<IActionResult> Insights()
     {
@@ -68,6 +124,81 @@ public class MemberProfileController : ControllerBase
 
         var profile = await GetOrCreateProfile(member.Id);
         return Ok(CalculateInsights(member, profile));
+    }
+
+    [HttpGet("dashboard")]
+    public async Task<IActionResult> Dashboard()
+    {
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (!long.TryParse(userId, out var parsedUserId))
+        {
+            return Unauthorized();
+        }
+
+        var member = await GetCurrentMember();
+        if (member == null)
+        {
+            return NotFound(new { message = "Member profile not found." });
+        }
+
+        var today = DateTime.UtcNow.Date;
+        var currentWeekMonday = today.AddDays(-(((int)today.DayOfWeek + 6) % 7));
+        var nextWeekMonday = currentWeekMonday.AddDays(7);
+        var previousWeekMonday = currentWeekMonday.AddDays(-7);
+        var currentDate = DateOnly.FromDateTime(DateTime.UtcNow);
+
+        var checkIns = await _context.CheckIns
+            .Where(item => item.MemberId == member.Id)
+            .ToListAsync();
+        var workouts = await _context.WorkoutSessions
+            .Where(item => item.UserId == parsedUserId)
+            .ToListAsync();
+        var attendedBookings = await _context.ClassBookings
+            .Where(item => item.MemberId == member.Id && (item.Attended || item.AttendedAt.HasValue))
+            .ToListAsync();
+        var memberships = await _context.MemberMemberships
+            .Where(item => item.MemberId == member.Id)
+            .ToListAsync();
+        var currentMembership = memberships
+            .Where(item => AppStatuses.IsActiveMembership(item.Status) && (!item.EndDate.HasValue || item.EndDate.Value >= currentDate))
+            .OrderByDescending(item => item.EndDate ?? DateOnly.MaxValue)
+            .ThenByDescending(item => item.StartDate ?? DateOnly.MinValue)
+            .FirstOrDefault();
+
+        var totalMinutes = checkIns.Sum(CheckInMinutes) + workouts.Sum(item => Math.Max(0, item.DurationSeconds / 60));
+        var currentWeekMinutes = TrainingMinutesBetween(checkIns, workouts, currentWeekMonday, nextWeekMonday);
+        var previousWeekMinutes = TrainingMinutesBetween(checkIns, workouts, previousWeekMonday, currentWeekMonday);
+        var currentWeekWorkouts = CountWorkoutsBetween(checkIns, workouts, currentWeekMonday, nextWeekMonday);
+        var previousWeekWorkouts = CountWorkoutsBetween(checkIns, workouts, previousWeekMonday, currentWeekMonday);
+        var currentWeekClasses = attendedBookings.Count(item => item.AttendedAt.HasValue && item.AttendedAt.Value.Date >= currentWeekMonday && item.AttendedAt.Value.Date < nextWeekMonday);
+        var previousWeekClasses = attendedBookings.Count(item => item.AttendedAt.HasValue && item.AttendedAt.Value.Date >= previousWeekMonday && item.AttendedAt.Value.Date < currentWeekMonday);
+        var weeklyActivity = Enumerable.Range(0, 7)
+            .Select(offset =>
+            {
+                var day = currentWeekMonday.AddDays(offset);
+                return new WeeklyActivityDto
+                {
+                    Day = day.ToString("ddd"),
+                    Date = DateOnly.FromDateTime(day),
+                    Minutes = TrainingMinutesForDate(checkIns, workouts, day),
+                    IsToday = day == today
+                };
+            })
+            .ToList();
+
+        return Ok(new ProfileDashboardStatsDto
+        {
+            TotalWorkouts = Math.Max(checkIns.Count, workouts.Count),
+            TotalHours = Math.Max(0, (int)Math.Round(totalMinutes / 60m)),
+            ClassesAttended = attendedBookings.Count,
+            MembershipRemainingDays = currentMembership?.EndDate is null ? 0 : Math.Max(0, currentMembership.EndDate.Value.DayNumber - currentDate.DayNumber),
+            WorkoutsChangePercent = PercentChange(previousWeekWorkouts, currentWeekWorkouts),
+            HoursChangePercent = PercentChange(previousWeekMinutes, currentWeekMinutes),
+            ClassesChangePercent = PercentChange(previousWeekClasses, currentWeekClasses),
+            MembershipStatus = currentMembership?.Status ?? AppStatuses.MembershipPending,
+            AverageTrainingMinutes = weeklyActivity.Count == 0 ? 0 : (int)Math.Round(weeklyActivity.Average(item => item.Minutes)),
+            WeeklyActivity = weeklyActivity
+        });
     }
 
     private async Task<Member?> GetCurrentMember()
@@ -340,4 +471,60 @@ public class MemberProfileController : ControllerBase
     }
 
     private static string? Trim(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    private static int CheckInMinutes(CheckIn checkIn)
+    {
+        if (!checkIn.CheckInTime.HasValue)
+        {
+            return 0;
+        }
+
+        var end = checkIn.CheckOutTime ?? checkIn.LastSeenAt;
+        if (!end.HasValue || end.Value <= checkIn.CheckInTime.Value)
+        {
+            return 0;
+        }
+
+        return Math.Max(0, (int)Math.Round((end.Value - checkIn.CheckInTime.Value).TotalMinutes));
+    }
+
+    private static int TrainingMinutesForDate(IEnumerable<CheckIn> checkIns, IEnumerable<WorkoutSession> workouts, DateTime day)
+    {
+        var date = day.Date;
+        var checkInMinutes = checkIns
+            .Where(item => item.CheckInTime.HasValue && item.CheckInTime.Value.Date == date)
+            .Sum(CheckInMinutes);
+        var workoutMinutes = workouts
+            .Where(item => item.CompletedAt.Date == date)
+            .Sum(item => Math.Max(0, item.DurationSeconds / 60));
+        return checkInMinutes + workoutMinutes;
+    }
+
+    private static int TrainingMinutesBetween(IEnumerable<CheckIn> checkIns, IEnumerable<WorkoutSession> workouts, DateTime start, DateTime end)
+    {
+        var checkInMinutes = checkIns
+            .Where(item => item.CheckInTime.HasValue && item.CheckInTime.Value.Date >= start && item.CheckInTime.Value.Date < end)
+            .Sum(CheckInMinutes);
+        var workoutMinutes = workouts
+            .Where(item => item.CompletedAt.Date >= start && item.CompletedAt.Date < end)
+            .Sum(item => Math.Max(0, item.DurationSeconds / 60));
+        return checkInMinutes + workoutMinutes;
+    }
+
+    private static int CountWorkoutsBetween(IEnumerable<CheckIn> checkIns, IEnumerable<WorkoutSession> workouts, DateTime start, DateTime end)
+    {
+        var checkInCount = checkIns.Count(item => item.CheckInTime.HasValue && item.CheckInTime.Value.Date >= start && item.CheckInTime.Value.Date < end);
+        var workoutCount = workouts.Count(item => item.CompletedAt.Date >= start && item.CompletedAt.Date < end);
+        return Math.Max(checkInCount, workoutCount);
+    }
+
+    private static decimal? PercentChange(int previous, int current)
+    {
+        if (previous <= 0)
+        {
+            return current > 0 ? null : 0;
+        }
+
+        return Math.Round((current - previous) / (decimal)previous * 100m, 1, MidpointRounding.AwayFromZero);
+    }
 }

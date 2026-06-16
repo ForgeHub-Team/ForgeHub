@@ -71,6 +71,7 @@ public class AuthResponseDto
     public long? MemberId { get; set; }
     public string FullName { get; set; } = string.Empty;
     public string Email { get; set; } = string.Empty;
+    public string? ProfilePhotoUrl { get; set; }
     public string Role { get; set; } = string.Empty;
     public long? GymId { get; set; }
     public long? BranchId { get; set; }
@@ -101,12 +102,48 @@ public class RefreshSessionDto
     public string RefreshToken { get; set; } = string.Empty;
 }
 
+public class ForgotPasswordRequestDto
+{
+    [Required]
+    public string Identifier { get; set; } = string.Empty;
+}
+
+public class ForgotPasswordVerifyDto
+{
+    [Required]
+    public string Identifier { get; set; } = string.Empty;
+
+    [Required]
+    public string Otp { get; set; } = string.Empty;
+
+    [Required]
+    public string ResetToken { get; set; } = string.Empty;
+}
+
+public class ForgotPasswordResetDto : ForgotPasswordVerifyDto
+{
+    [Required]
+    [MinLength(8)]
+    public string NewPassword { get; set; } = string.Empty;
+}
+
+public class ChangePasswordDto
+{
+    [Required]
+    public string CurrentPassword { get; set; } = string.Empty;
+
+    [Required]
+    [MinLength(8)]
+    public string NewPassword { get; set; } = string.Empty;
+}
+
 public class CurrentUserDto
 {
     public long Id { get; set; }
     public long UserId { get; set; }
     public long? MemberId { get; set; }
     public string Email { get; set; } = string.Empty;
+    public string? ProfilePhotoUrl { get; set; }
     public string FullName { get; set; } = string.Empty;
     public string Role { get; set; } = string.Empty;
     public long? GymId { get; set; }
@@ -286,6 +323,28 @@ public class MemberProfileDto
     public decimal? ProfileCompletionPercentage { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
+}
+
+public class ProfileDashboardStatsDto
+{
+    public int TotalWorkouts { get; set; }
+    public int TotalHours { get; set; }
+    public int ClassesAttended { get; set; }
+    public int MembershipRemainingDays { get; set; }
+    public decimal? WorkoutsChangePercent { get; set; }
+    public decimal? HoursChangePercent { get; set; }
+    public decimal? ClassesChangePercent { get; set; }
+    public string MembershipStatus { get; set; } = string.Empty;
+    public int AverageTrainingMinutes { get; set; }
+    public List<WeeklyActivityDto> WeeklyActivity { get; set; } = [];
+}
+
+public class WeeklyActivityDto
+{
+    public string Day { get; set; } = string.Empty;
+    public DateOnly Date { get; set; }
+    public int Minutes { get; set; }
+    public bool IsToday { get; set; }
 }
 
 public class UpdateMemberProfileDto

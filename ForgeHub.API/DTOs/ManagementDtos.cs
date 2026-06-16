@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using System.Text.Json;
 using Microsoft.AspNetCore.Http;
 
 namespace ForgeHub.API.DTOs;
@@ -76,9 +77,9 @@ public class CreateBranchRequest
     public decimal? AreaSqm { get; set; }
     public double? Lat { get; set; }
     public double? Lng { get; set; }
-    public TimeOnly? OpenTime { get; set; }
-    public TimeOnly? CloseTime { get; set; }
-    public bool IsActive { get; set; } = true;
+    public string? OpenTime { get; set; }
+    public string? CloseTime { get; set; }
+    public JsonElement? IsActive { get; set; }
 }
 
 public class UpdateBranchRequest : CreateBranchRequest
@@ -585,11 +586,25 @@ public class AdminDashboardRoleDto
     public string Tasks { get; set; } = "0";
     public string ClassesToday { get; set; } = "0";
     public string Subscriptions { get; set; } = "0 active";
+    public decimal MonthlyPlatformRevenue { get; set; }
+    public decimal PendingRevenue { get; set; }
+    public int LatePayments { get; set; }
+    public List<AdminPlatformRevenueRowDto> MonthlyPlatformRevenueRows { get; set; } = [];
     public string Conversion { get; set; } = "0%";
     public List<int> RevenueTrend { get; set; } = [];
     public List<AdminBarPointDto> GymPerformance { get; set; } = [];
     public List<AdminBarPointDto> BranchTrend { get; set; } = [];
     public List<AdminPiePointDto> AttendanceMix { get; set; } = [];
+}
+
+public class AdminPlatformRevenueRowDto
+{
+    public string Id { get; set; } = string.Empty;
+    public string Month { get; set; } = string.Empty;
+    public int PaidGyms { get; set; }
+    public decimal Revenue { get; set; }
+    public decimal UnpaidAmount { get; set; }
+    public int LockedGyms { get; set; }
 }
 
 public class AdminBarPointDto

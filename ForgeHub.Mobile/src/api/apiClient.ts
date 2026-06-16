@@ -108,3 +108,15 @@ export async function putJson<T>(url: string, data?: unknown) {
   const response = await apiClient.put<T>(url, data);
   return response.data;
 }
+
+export async function deleteJson<T>(url: string) {
+  const response = await apiClient.delete<T>(url);
+  return response.data;
+}
+
+export async function postMultipart<T>(url: string, data: FormData) {
+  const response = await apiClient.post<T>(url, data, {
+    headers: { "Content-Type": "multipart/form-data" }
+  });
+  return response.data;
+}

@@ -5,18 +5,19 @@ import { useMemo } from "react";
 import { useAuthGuard } from "@/auth/useAuthGuard";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { useActiveCheckInLocationWatcher } from "@/features/qr/useActiveCheckInLocationWatcher";
-import { colors } from "@/theme/colors";
+import { ForgeThemeProvider, useForgeTheme } from "@/theme/theme";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StyleSheet, View } from "react-native";
 
 function RootNavigator() {
   const checkingAuth = useAuthGuard();
   useActiveCheckInLocationWatcher();
+  const theme = useForgeTheme();
 
   return (
     <>
-      <StatusBar style="light" />
-      <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.background } }}>
+      <StatusBar style={theme.mode === "light" ? "dark" : "light"} />
+      <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: theme.background } }}>
         <Stack.Screen name="index" />
         <Stack.Screen name="login" />
         <Stack.Screen name="tabs" />
@@ -32,7 +33,7 @@ function RootNavigator() {
         <Stack.Screen name="classes/[id]" />
       </Stack>
       {checkingAuth ? (
-        <View style={styles.loadingOverlay}>
+        <View style={[styles.loadingOverlay, { backgroundColor: theme.background }]}>
           <SafeAreaView style={styles.loadingSafeArea}>
             <LoadingState label="Checking session" />
           </SafeAreaView>
@@ -52,16 +53,17 @@ export default function Layout() {
     }
   }), []);
   return (
-    <QueryClientProvider client={client}>
-      <RootNavigator />
-    </QueryClientProvider>
+    <ForgeThemeProvider>
+      <QueryClientProvider client={client}>
+        <RootNavigator />
+      </QueryClientProvider>
+    </ForgeThemeProvider>
   );
 }
 
 const styles = StyleSheet.create({
   loadingOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: colors.background,
     zIndex: 20
   },
   loadingSafeArea: {

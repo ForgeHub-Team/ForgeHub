@@ -100,6 +100,8 @@ function getFieldLabel(name: string): string {
   };
   return custom[name] ?? name.replace(/([A-Z])/g, " $1").replace(/^./, (str) => str.toUpperCase());
 }
+const numericFields: Array<keyof ProfileFormValues> = ["heightCm", "weightKg", "targetWeightKg", "bodyFatPercentage", "waistCm", "chestCm", "shoulderCm", "hipCm", "neckCm", "armCm", "thighCm", "dailyCaloriesTarget", "proteinTargetGrams", "carbsTargetGrams", "fatTargetGrams", "waterTargetMl"];
+const textFields: Array<keyof ProfileFormValues> = ["fitnessGoal", "activityLevel", "trainingExperience", "favoriteWorkoutType", "preferredTrainingDays", "preferredWorkoutTime", "bloodType", "medicalConditions", "allergies", "injuries", "medications", "healthNotes", "emergencyContactName", "emergencyContactRelationship", "emergencyContactPhone", "emergencyContactAltPhone", "language", "measurementUnit"];
 
 export function EditProfileScreen() {
   const queryClient = useQueryClient();

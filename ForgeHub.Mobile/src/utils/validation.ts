@@ -13,6 +13,33 @@ export const loginSchema = z.object({
   password: z.string().min(1, "Enter your password.")
 });
 
+export const forgotPasswordSchema = z.object({
+  identifier: z.string().trim().min(3, "Enter your phone, WhatsApp number, or email.")
+});
+
+export const otpSchema = z.object({
+  otp: z.string().trim().min(4, "Enter the OTP code.")
+});
+
+const passwordPairSchema = z.object({
+  newPassword: z.string().min(8, "Use at least 8 characters."),
+  confirmPassword: z.string().min(1, "Confirm your new password.")
+}).refine((value) => value.newPassword === value.confirmPassword, {
+  path: ["confirmPassword"],
+  message: "Passwords do not match."
+});
+
+export const resetPasswordSchema = passwordPairSchema;
+
+export const changePasswordSchema = z.object({
+  currentPassword: z.string().min(1, "Enter your current password."),
+  newPassword: z.string().min(8, "Use at least 8 characters."),
+  confirmPassword: z.string().min(1, "Confirm your new password.")
+}).refine((value) => value.newPassword === value.confirmPassword, {
+  path: ["confirmPassword"],
+  message: "Passwords do not match."
+});
+
 export const profileSchema = z.object({
   heightCm: optionalNumber,
   weightKg: optionalNumber,
@@ -55,4 +82,8 @@ export const profileSchema = z.object({
 });
 
 export type LoginFormValues = z.infer<typeof loginSchema>;
+export type ForgotPasswordValues = z.infer<typeof forgotPasswordSchema>;
+export type OtpFormValues = z.infer<typeof otpSchema>;
+export type ResetPasswordValues = z.infer<typeof resetPasswordSchema>;
+export type ChangePasswordValues = z.infer<typeof changePasswordSchema>;
 export type ProfileFormValues = z.infer<typeof profileSchema>;

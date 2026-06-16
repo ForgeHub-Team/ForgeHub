@@ -6,6 +6,7 @@ export interface AuthUser {
   memberId?: number | null;
   fullName: string;
   email: string;
+  profilePhotoUrl?: string | null;
   role: Role;
   gymId?: number | null;
   branchId?: number | null;

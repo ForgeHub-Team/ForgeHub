@@ -39,3 +39,23 @@ export interface Membership {
   currentMembership: CurrentMembership | null;
   memberships: MembershipHistoryItem[];
 }
+
+export interface MembershipPlanBranch {
+  id: number;
+  name: string;
+}
+
+export interface MembershipPlan {
+  id: number;
+  gymId?: number | null;
+  name: string;
+  price?: number | null;
+  durationMonth?: number | null;
+  durationMonths?: number | null;
+  accessType?: string | null;
+  includesClasses?: boolean;
+  includesPt?: boolean;
+  isActive?: boolean;
+  branchIds?: number[];
+  branches?: MembershipPlanBranch[];
+}

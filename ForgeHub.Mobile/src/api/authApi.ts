@@ -25,3 +25,19 @@ export async function logout() {
   if (!refreshToken) return;
   await postJson<void>(endpoints.auth.logout, { refreshToken });
 }
+
+export async function requestPasswordOtp(identifier: string) {
+  return postJson<{ resetToken: string; message: string; expiresAt?: string }>(endpoints.auth.forgotPasswordRequest, { identifier: identifier.trim() });
+}
+
+export async function verifyPasswordOtp(identifier: string, otp: string, resetToken: string) {
+  return postJson<{ resetToken: string; message: string }>(endpoints.auth.forgotPasswordVerify, { identifier: identifier.trim(), otp: otp.trim(), resetToken });
+}
+
+export async function resetForgottenPassword(identifier: string, otp: string, resetToken: string, newPassword: string) {
+  return postJson<{ message: string }>(endpoints.auth.forgotPasswordReset, { identifier: identifier.trim(), otp: otp.trim(), resetToken, newPassword });
+}
+
+export async function changePassword(currentPassword: string, newPassword: string) {
+  return postJson<{ message: string }>(endpoints.auth.changePassword, { currentPassword, newPassword });
+}

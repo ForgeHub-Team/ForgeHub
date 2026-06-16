@@ -4,8 +4,8 @@ export const roleHome: Record<Role, string> = {
   SuperAdmin: "/superadmin/dashboard",
   GymOwner: "/gym-owner/dashboard",
   BranchManager: "/branch-manager/dashboard",
-  Staff: "/staff/dashboard",
-  Trainer: "/trainer/today",
+  Staff: "/staff/member-search",
+  Trainer: "/trainer/dashboard",
   Member: "/access-denied"
 };
 

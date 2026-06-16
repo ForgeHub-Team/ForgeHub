@@ -6,6 +6,7 @@ using ForgeHub.API.Security;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using System.Text.Json;
 
 namespace ForgeHub.API.Controllers;
 
@@ -60,6 +61,15 @@ public class BranchesController : ControllerBase
             {
                 return BadRequest(new { message = "Invalid branch data." });
             }
+            if (!TryParseBranchTime(request.OpenTime, out var openTime, out var timeError) ||
+                !TryParseBranchTime(request.CloseTime, out var closeTime, out timeError))
+            {
+                return BadRequest(new { message = timeError });
+            }
+            if (!TryParseBranchIsActive(request.IsActive, out var isActive, out var activeError))
+            {
+                return BadRequest(new { message = activeError });
+            }
 
             var gymId = _currentUser.IsInRole(AppRoles.SuperAdmin)
                 ? request.GymId
@@ -85,9 +95,9 @@ public class BranchesController : ControllerBase
                 Name = request.Name,
                 Address = request.Address,
                 Phone = request.Phone,
-                OpenTime = request.OpenTime,
-                CloseTime = request.CloseTime,
-                IsActive = request.IsActive,
+                OpenTime = openTime,
+                CloseTime = closeTime,
+                IsActive = isActive,
 
                 // ✅ Lat/Lng instead of Location
                 RangeKm = request.RangeKm,
@@ -119,6 +129,15 @@ public class BranchesController : ControllerBase
             {
                 return BadRequest(new { message = "Invalid branch data." });
             }
+            if (!TryParseBranchTime(request.OpenTime, out var openTime, out var timeError) ||
+                !TryParseBranchTime(request.CloseTime, out var closeTime, out timeError))
+            {
+                return BadRequest(new { message = timeError });
+            }
+            if (!TryParseBranchIsActive(request.IsActive, out var isActive, out var activeError))
+            {
+                return BadRequest(new { message = activeError });
+            }
 
             var branch = await ApplyScope(_context.Branches.AsQueryable()).FirstOrDefaultAsync(item => item.Id == id);
             if (branch == null)
@@ -142,9 +161,9 @@ public class BranchesController : ControllerBase
             branch.Name = request.Name;
             branch.Address = request.Address;
             branch.Phone = request.Phone;
-            branch.OpenTime = request.OpenTime;
-            branch.CloseTime = request.CloseTime;
-            branch.IsActive = request.IsActive;
+            branch.OpenTime = openTime;
+            branch.CloseTime = closeTime;
+            branch.IsActive = isActive;
 
             // ✅ Lat/Lng fields
             branch.RangeKm = request.RangeKm;
@@ -215,5 +234,72 @@ public class BranchesController : ControllerBase
         }
 
         return ownedGymIds.Count == 1 ? ownedGymIds[0] : null;
+    }
+
+    private static bool TryParseBranchTime(string? value, out TimeOnly? time, out string error)
+    {
+        time = null;
+        error = string.Empty;
+
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return true;
+        }
+
+        if (TimeOnly.TryParse(value, out var parsed))
+        {
+            time = parsed;
+            return true;
+        }
+
+        error = "Branch time must use HH:mm format.";
+        return false;
+    }
+
+    private static bool TryParseBranchIsActive(JsonElement? value, out bool isActive, out string error)
+    {
+        isActive = true;
+        error = string.Empty;
+
+        if (!value.HasValue || value.Value.ValueKind is JsonValueKind.Undefined or JsonValueKind.Null)
+        {
+            return true;
+        }
+
+        if (value.Value.ValueKind == JsonValueKind.True)
+        {
+            isActive = true;
+            return true;
+        }
+
+        if (value.Value.ValueKind == JsonValueKind.False)
+        {
+            isActive = false;
+            return true;
+        }
+
+        if (value.Value.ValueKind == JsonValueKind.String)
+        {
+            var text = value.Value.GetString();
+            if (string.IsNullOrWhiteSpace(text))
+            {
+                return true;
+            }
+
+            if (bool.TryParse(text, out var parsed))
+            {
+                isActive = parsed;
+                return true;
+            }
+
+            if (string.Equals(text, "on", StringComparison.OrdinalIgnoreCase))
+            {
+                isActive = true;
+                return true;
+            }
+        }
+
+        error = "Branch active status must be true or false.";
+        return false;
     }
 }

@@ -6,7 +6,6 @@ import { LoginPage } from "../pages/auth/LoginPage";
 import { ForgotPasswordPage } from "../pages/auth/ForgotPasswordPage";
 import { AuditLogsPage } from "../pages/superadmin/AuditLogsPage";
 import { GymsPage } from "../pages/superadmin/GymsPage";
-import { PlatformReportsPage } from "../pages/superadmin/PlatformReportsPage";
 import { PlatformUsersPage } from "../pages/superadmin/PlatformUsersPage";
 import { SuperAdminDashboard } from "../pages/superadmin/SuperAdminDashboard";
 import { GymOwnerDashboard } from "../pages/gym-owner/GymOwnerDashboard";
@@ -15,7 +14,6 @@ import { OwnerMembersPage } from "../pages/gym-owner/OwnerMembersPage";
 import { OwnerMembershipPlansPage } from "../pages/gym-owner/OwnerMembershipPlansPage";
 import { OwnerNotificationsPage } from "../pages/gym-owner/OwnerNotificationsPage";
 import { OwnerPaymentsPage } from "../pages/gym-owner/OwnerPaymentsPage";
-import { OwnerReportsPage } from "../pages/gym-owner/OwnerReportsPage";
 import { OwnerStaffPage } from "../pages/gym-owner/OwnerStaffPage";
 import { OwnerTrainersPage } from "../pages/gym-owner/OwnerTrainersPage";
 import { BranchCheckInsPage } from "../pages/branch-manager/BranchCheckInsPage";
@@ -31,7 +29,6 @@ import { ManualCheckInPage } from "../pages/staff/ManualCheckInPage";
 import { MemberSearchPage } from "../pages/staff/MemberSearchPage";
 import { RegisterMemberPage } from "../pages/staff/RegisterMemberPage";
 import { RenewMembershipPage } from "../pages/staff/RenewMembershipPage";
-import { StaffDashboard } from "../pages/staff/StaffDashboard";
 import { StaffPaymentsPage } from "../pages/staff/StaffPaymentsPage";
 import { TrainerMemberDetailPage } from "../pages/trainer/TrainerMemberDetailPage";
 import { TrainerMembersPage } from "../pages/trainer/TrainerMembersPage";
@@ -68,7 +65,6 @@ export function AppRoutes() {
             <Route path="/superadmin/gym-owners" element={<Navigate to="/superadmin/gyms" replace />} />
             <Route path="/superadmin/platform-users" element={<PlatformUsersPage />} />
             <Route path="/superadmin/branch-qr" element={<BranchQrPage />} />
-            <Route path="/superadmin/reports" element={<PlatformReportsPage />} />
             <Route path="/superadmin/audit-logs" element={<AuditLogsPage />} />
           </Route>
           <Route element={<RoleGuard allowed={["GymOwner"]} />}>
@@ -83,7 +79,6 @@ export function AppRoutes() {
             <Route path="/gym-owner/trainers" element={<OwnerTrainersPage />} />
             <Route path="/gym-owner/staff" element={<OwnerStaffPage />} />
             <Route path="/gym-owner/notifications" element={<OwnerNotificationsPage />} />
-            <Route path="/gym-owner/reports" element={<OwnerReportsPage />} />
           </Route>
           <Route element={<RoleGuard allowed={["BranchManager"]} />}>
             <Route path="/branch-manager/dashboard" element={<BranchManagerDashboard />} />
@@ -98,27 +93,26 @@ export function AppRoutes() {
             <Route path="/branch-manager/branch-qr" element={<BranchQrPage />} />
           </Route>
           <Route element={<RoleGuard allowed={["Staff"]} />}>
-            <Route path="/staff/dashboard" element={<StaffDashboard />} />
+            <Route path="/staff/dashboard" element={<Navigate to="/staff/member-search" replace />} />
             <Route path="/staff/member-search" element={<MemberSearchPage />} />
             <Route path="/staff/register-member" element={<RegisterMemberPage />} />
             <Route path="/staff/renew-membership" element={<RenewMembershipPage />} />
             <Route path="/staff/payments" element={<StaffPaymentsPage />} />
             <Route path="/staff/manual-check-in" element={<ManualCheckInPage />} />
-            <Route path="/staff/today-attendance" element={<Navigate to="/staff/dashboard" replace />} />
+            <Route path="/staff/today-attendance" element={<Navigate to="/staff/member-search" replace />} />
             <Route path="/staff/branch-qr" element={<BranchQrPage />} />
           </Route>
           <Route element={<RoleGuard allowed={["Trainer"]} />}>
-            <Route path="/trainer" element={<Navigate to="/trainer/today" replace />} />
-            <Route path="/trainer/today" element={<TrainerTodayPage />} />
+            <Route path="/trainer" element={<Navigate to="/trainer/dashboard" replace />} />
+            <Route path="/trainer/dashboard" element={<TrainerTodayPage />} />
+            <Route path="/trainer/today" element={<Navigate to="/trainer/dashboard" replace />} />
             <Route path="/trainer/schedule" element={<TrainerSchedulePage />} />
             <Route path="/trainer/members" element={<TrainerMembersPage />} />
             <Route path="/trainer/member/:memberId" element={<TrainerMemberDetailPage />} />
             <Route path="/trainer/session/:sessionId" element={<TrainerSessionPage />} />
             <Route path="/trainer/notes/new" element={<TrainerQuickNotePage />} />
             <Route path="/trainer/profile" element={<TrainerProfilePage />} />
-            <Route path="/trainer/dashboard" element={<Navigate to="/trainer/today" replace />} />
             <Route path="/trainer/classes" element={<Navigate to="/trainer/schedule" replace />} />
-            <Route path="/trainer/sessions" element={<Navigate to="/trainer/schedule" replace />} />
             <Route path="/trainer/notes" element={<Navigate to="/trainer/notes/new" replace />} />
           </Route>
           <Route path="/settings" element={<SettingsPage />} />

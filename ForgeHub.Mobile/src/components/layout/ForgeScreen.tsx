@@ -1,7 +1,7 @@
 import { PropsWithChildren } from "react";
 import { RefreshControl, ScrollView, StyleSheet, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { colors } from "@/theme/colors";
+import { useForgeTheme } from "@/theme/theme";
 import { ForgeHeader } from "./ForgeHeader";
 
 interface Props extends PropsWithChildren {
@@ -14,10 +14,11 @@ interface Props extends PropsWithChildren {
 }
 
 export function ForgeScreen({ title, subtitle, children, scroll = true, refreshing, onRefresh, showNotifications = true }: Props) {
+  const theme = useForgeTheme();
   const content = scroll ? (
     <ScrollView
       contentContainerStyle={styles.content}
-      refreshControl={onRefresh ? <RefreshControl tintColor={colors.primary} refreshing={Boolean(refreshing)} onRefresh={onRefresh} /> : undefined}
+      refreshControl={onRefresh ? <RefreshControl tintColor={theme.primary} refreshing={Boolean(refreshing)} onRefresh={onRefresh} /> : undefined}
     >
       {children}
     </ScrollView>
@@ -25,7 +26,7 @@ export function ForgeScreen({ title, subtitle, children, scroll = true, refreshi
     <View style={styles.flex}>{children}</View>
   );
   return (
-    <SafeAreaView style={styles.safe}>
+    <SafeAreaView style={[styles.safe, { backgroundColor: theme.background }]}>
       <ForgeHeader title={title} subtitle={subtitle} showNotifications={showNotifications} />
       {content}
     </SafeAreaView>
@@ -33,7 +34,7 @@ export function ForgeScreen({ title, subtitle, children, scroll = true, refreshi
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.background },
+  safe: { flex: 1 },
   flex: { flex: 1 },
-  content: { padding: 20, gap: 16, paddingBottom: 120 }
+  content: { padding: 20, gap: 16, paddingBottom: 140 }
 });

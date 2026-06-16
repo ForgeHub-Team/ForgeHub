@@ -42,6 +42,7 @@ if (jwtKey.Length < 32)
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddHttpContextAccessor();
+builder.Services.AddHttpClient();
 
 builder.Services.AddSwaggerGen(options =>
 {
@@ -123,6 +124,22 @@ builder.Services.AddCors(options =>
 });
 
 var app = builder.Build();
+
+using (var scope = app.Services.CreateScope())
+{
+    var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+    try
+    {
+        if (await dbContext.Database.CanConnectAsync())
+        {
+            await dbContext.Database.ExecuteSqlRawAsync("ALTER TABLE IF EXISTS users ADD COLUMN IF NOT EXISTS profile_photo_url text;");
+        }
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine("Profile photo schema check failed: " + ex.Message);
+    }
+}
 
 var seedDatabase = app.Environment.IsDevelopment() || builder.Configuration.GetValue<bool>("SeedDatabase");
 if (seedDatabase)

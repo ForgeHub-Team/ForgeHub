@@ -24,7 +24,21 @@ export interface AdminWorkspace {
   notifications: Notification[];
   subscriptions?: unknown[];
   systemLogs?: unknown[];
-  dashboard?: Record<string, unknown>;
+  dashboard?: {
+    platform?: {
+      monthlyPlatformRevenue?: number;
+      pendingRevenue?: number;
+      latePayments?: number;
+      monthlyPlatformRevenueRows?: {
+        id: string;
+        month: string;
+        paidGyms: number;
+        revenue: number;
+        unpaidAmount: number;
+        lockedGyms: number;
+      }[];
+    };
+  };
 }
 
 export const dashboardApi = {

@@ -184,6 +184,7 @@ public class AuthService : IAuthService
             UserId = user.Id,
             FullName = user.FullName ?? string.Empty,
             Email = user.Email ?? string.Empty,
+            ProfilePhotoUrl = user.ProfilePhotoUrl,
             Role = role.Name,
             GymId = user.GymId,
             BranchId = user.BranchId,

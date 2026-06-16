@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using System.Security.Cryptography;
 using ForgeHub.API.Data;
 using ForgeHub.API.DTOs;
 using ForgeHub.API.Helpers;
@@ -62,6 +63,83 @@ public class AuthController : ControllerBase
         }
     }
 
+    [HttpPost("member/forgot-password/request")]
+    [AllowAnonymous]
+    public async Task<IActionResult> RequestForgotPasswordOtp([FromBody] ForgotPasswordRequestDto dto)
+    {
+        if (dto == null || string.IsNullOrWhiteSpace(dto.Identifier))
+        {
+            return BadRequest(new { message = "Enter the phone, WhatsApp number, or email linked to your account." });
+        }
+
+        var resetToken = Convert.ToHexString(RandomNumberGenerator.GetBytes(24)).ToLowerInvariant();
+        var user = await FindMemberUserByIdentifier(dto.Identifier);
+        if (user != null)
+        {
+            var otp = RandomNumberGenerator.GetInt32(100000, 1000000).ToString();
+            _context.OtpRecords.Add(new OtpRecord
+            {
+                UserId = user.Id,
+                DeviceId = PasswordResetDeviceId(resetToken),
+                OtpCode = otp,
+                ExpiresAt = DateTime.UtcNow.AddMinutes(10),
+                CreatedAt = DateTime.UtcNow
+            });
+            await _context.SaveChangesAsync();
+
+            if (HttpContext.RequestServices.GetRequiredService<IHostEnvironment>().IsDevelopment())
+            {
+                Console.WriteLine($"ForgeHub password reset OTP for user {user.Id}: {otp}");
+            }
+        }
+
+        return Ok(new
+        {
+            resetToken,
+            message = "If the account exists, a password reset OTP has been sent. The code expires in 10 minutes."
+        });
+    }
+
+    [HttpPost("member/forgot-password/verify")]
+    [AllowAnonymous]
+    public async Task<IActionResult> VerifyForgotPasswordOtp([FromBody] ForgotPasswordVerifyDto dto)
+    {
+        var record = await GetValidPasswordResetRecord(dto);
+        if (record == null)
+        {
+            return BadRequest(new { message = "Invalid or expired OTP." });
+        }
+
+        return Ok(new { resetToken = dto.ResetToken, message = "OTP verified. Enter a new password." });
+    }
+
+    [HttpPost("member/forgot-password/reset")]
+    [AllowAnonymous]
+    public async Task<IActionResult> ResetForgottenPassword([FromBody] ForgotPasswordResetDto dto)
+    {
+        if (dto == null || string.IsNullOrWhiteSpace(dto.NewPassword) || dto.NewPassword.Length < 8)
+        {
+            return BadRequest(new { message = "Use a new password with at least 8 characters." });
+        }
+
+        var record = await GetValidPasswordResetRecord(dto);
+        if (record == null)
+        {
+            return BadRequest(new { message = "Invalid or expired OTP." });
+        }
+
+        var user = record.User;
+        if (user == null)
+        {
+            return BadRequest(new { message = "Invalid or expired OTP." });
+        }
+
+        user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(dto.NewPassword);
+        record.IsUsed = true;
+        await _context.SaveChangesAsync();
+        return Ok(new { message = "Password reset successfully. You can now sign in." });
+    }
+
     [HttpPost("refresh")]
     [AllowAnonymous]
     public async Task<IActionResult> Refresh([FromBody] RefreshSessionDto dto)
@@ -76,12 +154,75 @@ public class AuthController : ControllerBase
         }
     }
 
+    private async Task<User?> FindMemberUserByIdentifier(string identifier)
+    {
+        var normalized = identifier.Trim().ToLowerInvariant();
+        return await _context.Users
+            .Include(user => user.Role)
+            .Where(user => user.IsActive && user.Role != null && user.Role.Name == AppRoles.Member)
+            .FirstOrDefaultAsync(user =>
+                (user.Email != null && user.Email.ToLower() == normalized) ||
+                (user.Phone != null && user.Phone == identifier.Trim()));
+    }
+
+    private async Task<OtpRecord?> GetValidPasswordResetRecord(ForgotPasswordVerifyDto dto)
+    {
+        if (dto == null || string.IsNullOrWhiteSpace(dto.Identifier) || string.IsNullOrWhiteSpace(dto.Otp) || string.IsNullOrWhiteSpace(dto.ResetToken))
+        {
+            return null;
+        }
+
+        var user = await FindMemberUserByIdentifier(dto.Identifier);
+        if (user == null)
+        {
+            return null;
+        }
+
+        return await _context.OtpRecords
+            .Include(record => record.User)
+            .Where(record => record.UserId == user.Id &&
+                record.DeviceId == PasswordResetDeviceId(dto.ResetToken) &&
+                record.OtpCode == dto.Otp.Trim() &&
+                !record.IsUsed &&
+                record.ExpiresAt >= DateTime.UtcNow)
+            .OrderByDescending(record => record.CreatedAt)
+            .FirstOrDefaultAsync();
+    }
+
+    private static string PasswordResetDeviceId(string resetToken) => $"password-reset:{resetToken.Trim()}";
+
     [HttpPost("logout")]
     [Authorize]
     public async Task<IActionResult> Logout([FromBody] LogoutDto dto)
     {
         await _authService.LogoutAsync(dto.RefreshToken);
         return NoContent();
+    }
+
+    [HttpPost("member/change-password")]
+    [Authorize(Roles = AppRoles.Member)]
+    public async Task<IActionResult> ChangeMemberPassword([FromBody] ChangePasswordDto dto)
+    {
+        if (dto == null || string.IsNullOrWhiteSpace(dto.CurrentPassword) || string.IsNullOrWhiteSpace(dto.NewPassword) || dto.NewPassword.Length < 8)
+        {
+            return BadRequest(new { message = "Enter your current password and a new password with at least 8 characters." });
+        }
+
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (!long.TryParse(userId, out var parsedUserId))
+        {
+            return Unauthorized();
+        }
+
+        var user = await _context.Users.FirstOrDefaultAsync(item => item.Id == parsedUserId && item.IsActive);
+        if (user == null || string.IsNullOrWhiteSpace(user.PasswordHash) || !BCrypt.Net.BCrypt.Verify(dto.CurrentPassword, user.PasswordHash))
+        {
+            return BadRequest(new { message = "Current password is incorrect." });
+        }
+
+        user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(dto.NewPassword);
+        await _context.SaveChangesAsync();
+        return Ok(new { message = "Password changed successfully." });
     }
 
     // ================= REGISTER =================
@@ -298,6 +439,7 @@ public class AuthController : ControllerBase
             UserId = user.Id,
             MemberId = member?.Id,
             Email = user.Email ?? string.Empty,
+            ProfilePhotoUrl = user.ProfilePhotoUrl,
             FullName = user.FullName ?? "ForgeHub Member",
             Role = user.Role?.Name ?? AppRoles.Member,
             GymId = user.GymId ?? member?.GymId,

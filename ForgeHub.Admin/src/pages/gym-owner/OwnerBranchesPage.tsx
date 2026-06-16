@@ -8,7 +8,7 @@ import type { Branch } from "../../types/branch";
 
 export function OwnerBranchesPage() {
   const navigate = useNavigate();
-  const { data: workspace } = useApi(dashboardApi.getWorkspace, []);
+  const { data: workspace, loading: workspaceLoading, error: workspaceError } = useApi(dashboardApi.getWorkspace, []);
   const gyms = workspace?.gyms ?? [];
   return (
     <EntityPage<Branch>
@@ -25,6 +25,8 @@ export function OwnerBranchesPage() {
       form={(close, reload, notify, notifyError) => (
         <BranchForm
           gyms={gyms}
+          gymsLoading={workspaceLoading}
+          gymLoadError={workspaceError}
           onSubmit={async (v) => {
             try {
               notify("");
@@ -42,6 +44,8 @@ export function OwnerBranchesPage() {
       editForm={(row, close, reload) => (
         <BranchForm
           gyms={gyms}
+          gymsLoading={workspaceLoading}
+          gymLoadError={workspaceError}
           initialValues={{
             gymId: row.gymId ?? undefined,
             name: row.name,

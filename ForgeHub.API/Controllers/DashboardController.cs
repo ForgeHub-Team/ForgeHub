@@ -33,6 +33,7 @@ public class DashboardController : ControllerBase
         var classes = ApplyClassScope(_context.Classes.AsQueryable());
         var checkIns = ApplyCheckInScope(_context.CheckIns.AsQueryable());
         var users = ApplyUserScope(_context.Users.AsQueryable());
+        var subscriptionKpis = await GetSubscriptionKpisAsync();
 
         var revenue = await payments.SumAsync(item => item.Amount ?? 0m);
         var todayAttendance = await checkIns.CountAsync(item =>
@@ -77,7 +78,10 @@ public class DashboardController : ControllerBase
                 classBookings,
                 activeMemberships,
                 inactiveMembers = await members.CountAsync(item => !item.IsActive),
-                expiringMemberships
+                expiringMemberships,
+                monthlyPlatformRevenue = subscriptionKpis.MonthlyPlatformRevenue,
+                pendingRevenue = subscriptionKpis.PendingRevenue,
+                latePayments = subscriptionKpis.LatePayments
             },
             generatedAt = DateTime.UtcNow
         };
@@ -196,5 +200,39 @@ public class DashboardController : ControllerBase
         }
 
         return query;
+    }
+
+    private async Task<(decimal MonthlyPlatformRevenue, decimal PendingRevenue, int LatePayments)> GetSubscriptionKpisAsync()
+    {
+        var now = DateTime.UtcNow;
+        var monthStart = new DateTime(now.Year, now.Month, 1, 0, 0, 0, DateTimeKind.Utc);
+        var nextMonthStart = monthStart.AddMonths(1);
+        var today = DateOnly.FromDateTime(now);
+
+        var monthlyPlatformRevenue = await _context.GymSubscriptions
+            .Where(subscription =>
+                subscription.PaidAt.HasValue &&
+                subscription.PaidAt.Value >= monthStart &&
+                subscription.PaidAt.Value < nextMonthStart)
+            .SumAsync(subscription => subscription.Amount ?? 0m);
+
+        var pendingRevenue = await _context.GymSubscriptions
+            .Where(subscription =>
+                !subscription.PaidAt.HasValue &&
+                (subscription.Status == null || subscription.Status.ToLower() != "cancelled") &&
+                (subscription.DueDate >= today ||
+                 subscription.Status != null &&
+                 (subscription.Status.ToLower() == "pending" ||
+                  subscription.Status.ToLower() == "due" ||
+                  subscription.Status.ToLower() == "notice")))
+            .SumAsync(subscription => subscription.Amount ?? 0m);
+
+        var latePayments = await _context.GymSubscriptions
+            .CountAsync(subscription =>
+                !subscription.PaidAt.HasValue &&
+                subscription.DueDate < today &&
+                (subscription.Status == null || subscription.Status.ToLower() != "cancelled"));
+
+        return (monthlyPlatformRevenue, pendingRevenue, latePayments);
     }
 }

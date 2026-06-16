@@ -1,13 +1,11 @@
 import { getMe } from "./authApi";
 import { getCurrentGymSession } from "./checkInApi";
-import { getBookings, getClasses } from "./classesApi";
 import { getMembership } from "./membershipApi";
 import { getNotifications } from "./notificationsApi";
 import { getProfile } from "./profileApi";
 import { getJson } from "./apiClient";
 import { endpoints } from "./endpoints";
 import { AuthUser } from "@/types/auth";
-import { Booking, GymClass } from "@/types/class";
 import { CurrentGymSession } from "@/types/checkIn";
 import { Membership } from "@/types/membership";
 import { NotificationItem } from "@/types/notification";
@@ -38,8 +36,6 @@ export interface HomeDashboard {
   membership: Membership | null;
   stats: DashboardStats;
   activityHeatmap: ActivityHeatmapDay[];
-  bookings: Booking[];
-  classes: GymClass[];
   currentGymSession: CurrentGymSession | null;
   notifications: NotificationItem[];
   warnings: string[];
@@ -52,14 +48,12 @@ export async function getHomeDashboard(): Promise<HomeDashboard> {
     getMembership(),
     getJson<DashboardStats>(endpoints.home.stats),
     getJson<ActivityHeatmapDay[]>(endpoints.home.activityHeatmap),
-    getBookings(),
-    getClasses(),
     getCurrentGymSession(),
     getNotifications()
   ]);
 
   const warnings = settled
-    .map((item, index) => ({ item, label: ["user", "profile", "membership", "stats", "activity", "bookings", "classes", "gym session", "notifications"][index] }))
+    .map((item, index) => ({ item, label: ["user", "profile", "membership", "stats", "activity", "gym session", "notifications"][index] }))
     .filter((entry) => entry.item.status === "rejected")
     .map((entry) => entry.label ?? "endpoint");
 
@@ -74,10 +68,8 @@ export async function getHomeDashboard(): Promise<HomeDashboard> {
     membership: value<Membership | null>(2, null),
     stats: value(3, { weeklyAttendance: [], monthlyAttendance: [], workoutFrequency: 0, totalCheckIns: 0, caloriesBurnedEstimate: 0 }),
     activityHeatmap: value<ActivityHeatmapDay[]>(4, []),
-    bookings: value<Booking[]>(5, []),
-    classes: value<GymClass[]>(6, []),
-    currentGymSession: value<CurrentGymSession | null>(7, null),
-    notifications: value<NotificationItem[]>(8, []),
+    currentGymSession: value<CurrentGymSession | null>(5, null),
+    notifications: value<NotificationItem[]>(6, []),
     warnings
   };
 }
