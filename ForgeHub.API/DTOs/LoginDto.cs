@@ -82,6 +82,10 @@ public class AuthResponseDto
     public bool RequiresOtp { get; set; }
     public bool DeviceApproved { get; set; }
     public string OtpHint { get; set; } = string.Empty;
+    public string? QrCode { get; set; }
+    public bool MembershipActive { get; set; }
+    public string MembershipPlan { get; set; } = string.Empty;
+    public int RemainingDays { get; set; }
 }
 
 public class VerifyOtpDto
@@ -158,6 +162,7 @@ public class CurrentUserDto
     public double GymLatitude { get; set; }
     public double GymLongitude { get; set; }
     public int GeofenceRadiusMeters { get; set; }
+    public string? QrCode { get; set; }
 }
 
 public class MembershipResponseDto
@@ -321,6 +326,10 @@ public class MemberProfileDto
     public bool NotificationsEnabled { get; set; }
     public string? ProfilePhotoUrl { get; set; }
     public decimal? ProfileCompletionPercentage { get; set; }
+    public DateOnly? Dob { get; set; }
+    public string? Gender { get; set; }
+    public string? QrCode { get; set; }
+    public string? TrainerName { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
 }
@@ -386,6 +395,8 @@ public class UpdateMemberProfileDto
     public string? Theme { get; set; }
     public string? MeasurementUnit { get; set; }
     public bool NotificationsEnabled { get; set; } = true;
+    public DateOnly? Dob { get; set; }
+    public string? Gender { get; set; }
     public string? ProfilePhotoUrl { get; set; }
 }
 

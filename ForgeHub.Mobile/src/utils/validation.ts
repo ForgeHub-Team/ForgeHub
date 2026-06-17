@@ -6,7 +6,19 @@ const optionalNumber = z.preprocess((value) => {
   return Number.isFinite(parsed) ? parsed : value;
 }, z.number().min(0).optional());
 
-const phone = z.string().trim().optional().refine((value) => !value || /^[+\d][+\d\s().-]{6,}$/.test(value), "Enter a valid phone number.");
+const heightSchema = z.preprocess((value) => {
+  if (value === "" || value === null || value === undefined) return undefined;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : value;
+}, z.number().min(80, "Height must be between 80 and 250 cm.").max(250, "Height must be between 80 and 250 cm.").optional());
+
+const weightSchema = z.preprocess((value) => {
+  if (value === "" || value === null || value === undefined) return undefined;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : value;
+}, z.number().min(25, "Weight must be between 25 and 300 kg.").max(300, "Weight must be between 25 and 300 kg.").optional());
+
+const phone = z.string().trim().optional().refine((value) => !value || /^\+?[0-9\s().-]{7,20}$/.test(value), "Enter a valid phone number (7 to 20 digits).");
 
 export const loginSchema = z.object({
   identifier: z.string().trim().min(3, "Enter your email or phone."),
@@ -41,10 +53,26 @@ export const changePasswordSchema = z.object({
 });
 
 export const profileSchema = z.object({
-  heightCm: optionalNumber,
-  weightKg: optionalNumber,
-  fitnessGoal: z.string().optional(),
-  targetWeightKg: optionalNumber,
+  heightCm: heightSchema,
+  weightKg: weightSchema,
+  fitnessGoal: z.string().trim().min(1, "Goal is required."),
+  targetWeightKg: weightSchema,
+  dob: z.string().trim().min(1, "Date of Birth is required.").refine(
+    (val) => {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(val)) return false;
+      const date = new Date(val);
+      if (isNaN(date.getTime())) return false;
+      const today = new Date();
+      let age = today.getFullYear() - date.getFullYear();
+      const m = today.getMonth() - date.getMonth();
+      if (m < 0 || (m === 0 && today.getDate() < date.getDate())) {
+        age--;
+      }
+      return age >= 10 && age <= 100;
+    },
+    { message: "Age must be between 10 and 100 years (YYYY-MM-DD)." }
+  ),
+  gender: z.string().optional(),
   activityLevel: z.string().optional(),
   trainingExperience: z.string().optional(),
   favoriteWorkoutType: z.string().optional(),

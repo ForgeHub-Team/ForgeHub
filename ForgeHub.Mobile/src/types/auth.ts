@@ -21,6 +21,7 @@ export interface AuthUser {
   membershipActive?: boolean;
   membershipPlan?: string;
   remainingDays?: number;
+  qrCode?: string | null;
 }
 
 export interface LoginResponse extends AuthUser {

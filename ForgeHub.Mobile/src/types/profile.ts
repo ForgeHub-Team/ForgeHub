@@ -39,4 +39,8 @@ export interface MemberProfile {
   notificationsEnabled?: boolean;
   profilePhotoUrl?: string | null;
   profileCompletionPercentage?: number | null;
+  dob?: string | null;
+  gender?: string | null;
+  trainerName?: string | null;
+  qrCode?: string | null;
 }

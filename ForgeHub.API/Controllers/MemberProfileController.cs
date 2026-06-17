@@ -34,18 +34,13 @@ public class MemberProfileController : ControllerBase
         }
 
         var profile = await GetOrCreateProfile(member.Id);
-        return Ok(ToDto(profile));
+        var trainerName = await GetTrainerNameAsync(member.Id);
+        return Ok(ToDto(profile, member, trainerName));
     }
 
     [HttpPut]
     public async Task<IActionResult> Update([FromBody] UpdateMemberProfileDto dto)
     {
-        var validation = ValidateProfile(dto);
-        if (validation.Count > 0)
-        {
-            return BadRequest(new { message = "Profile validation failed.", errors = validation });
-        }
-
         var member = await GetCurrentMember();
         if (member == null)
         {
@@ -53,10 +48,28 @@ public class MemberProfileController : ControllerBase
         }
 
         var profile = await GetOrCreateProfile(member.Id);
-        ApplyUpdate(profile, dto);
+
+        // Self-heal/populate missing fields from existing records to support tab-by-tab saving
+        if (!dto.Dob.HasValue)
+        {
+            dto.Dob = member.Dob ?? DateOnly.FromDateTime(DateTime.UtcNow.AddYears(-25));
+        }
+        if (string.IsNullOrWhiteSpace(dto.FitnessGoal))
+        {
+            dto.FitnessGoal = profile.FitnessGoal ?? "General Fitness";
+        }
+
+        var validation = ValidateProfile(dto);
+        if (validation.Count > 0)
+        {
+            return BadRequest(new { message = "Profile validation failed.", errors = validation });
+        }
+
+        ApplyUpdate(profile, member, dto);
         await _context.SaveChangesAsync();
 
-        return Ok(ToDto(profile));
+        var trainerName = await GetTrainerNameAsync(member.Id);
+        return Ok(ToDto(profile, member, trainerName));
     }
 
     [HttpPost("photo")]
@@ -94,7 +107,8 @@ public class MemberProfileController : ControllerBase
         profile.UpdatedAt = DateTime.UtcNow;
         await _context.SaveChangesAsync();
 
-        return Ok(ToDto(profile));
+        var trainerName = await GetTrainerNameAsync(member.Id);
+        return Ok(ToDto(profile, member, trainerName));
     }
 
     [HttpDelete("photo")]
@@ -110,7 +124,8 @@ public class MemberProfileController : ControllerBase
         profile.ProfilePhotoUrl = null;
         profile.UpdatedAt = DateTime.UtcNow;
         await _context.SaveChangesAsync();
-        return Ok(ToDto(profile));
+        var trainerName = await GetTrainerNameAsync(member.Id);
+        return Ok(ToDto(profile, member, trainerName));
     }
 
     [HttpGet("insights")]
@@ -212,6 +227,22 @@ public class MemberProfileController : ControllerBase
         return await _context.Members.FirstOrDefaultAsync(item => item.UserId == parsedUserId);
     }
 
+    private async Task<string?> GetTrainerNameAsync(long memberId)
+    {
+        var trainerSession = await _context.TrainerSessions
+            .Where(item => item.MemberId == memberId && item.TrainerUserId.HasValue)
+            .OrderByDescending(item => item.SessionDate ?? DateTime.MinValue)
+            .FirstOrDefaultAsync();
+
+        if (trainerSession?.TrainerUserId != null)
+        {
+            var trainerUser = await _context.Users
+                .FirstOrDefaultAsync(u => u.Id == trainerSession.TrainerUserId.Value);
+            return trainerUser?.FullName;
+        }
+        return null;
+    }
+
     private async Task<MemberProfile> GetOrCreateProfile(long memberId)
     {
         var profile = await _context.MemberProfiles.FirstOrDefaultAsync(item => item.MemberId == memberId);
@@ -231,7 +262,7 @@ public class MemberProfileController : ControllerBase
         return profile;
     }
 
-    private static MemberProfileDto ToDto(MemberProfile profile) => new()
+    private static MemberProfileDto ToDto(MemberProfile profile, Member? member = null, string? trainerName = null) => new()
     {
         MemberId = profile.MemberId,
         HeightCm = profile.HeightCm,
@@ -273,11 +304,15 @@ public class MemberProfileController : ControllerBase
         NotificationsEnabled = profile.NotificationsEnabled,
         ProfilePhotoUrl = profile.ProfilePhotoUrl,
         ProfileCompletionPercentage = profile.ProfileCompletionPercentage,
+        Dob = member?.Dob,
+        Gender = member?.Gender,
+        QrCode = member?.QrCode,
+        TrainerName = trainerName,
         CreatedAt = profile.CreatedAt,
         UpdatedAt = profile.UpdatedAt
     };
 
-    private static void ApplyUpdate(MemberProfile profile, UpdateMemberProfileDto dto)
+    private static void ApplyUpdate(MemberProfile profile, Member member, UpdateMemberProfileDto dto)
     {
         profile.HeightCm = dto.HeightCm;
         profile.WeightKg = dto.WeightKg;
@@ -311,6 +346,10 @@ public class MemberProfileController : ControllerBase
         profile.NotificationsEnabled = dto.NotificationsEnabled;
         profile.ProfilePhotoUrl = Trim(dto.ProfilePhotoUrl);
         profile.UpdatedAt = DateTime.UtcNow;
+
+        member.Dob = dto.Dob;
+        member.Gender = Trim(dto.Gender);
+
         profile.ProfileCompletionPercentage = CalculateCompletion(profile);
     }
 
@@ -383,6 +422,27 @@ public class MemberProfileController : ControllerBase
     private static List<string> ValidateProfile(UpdateMemberProfileDto dto)
     {
         var errors = new List<string>();
+
+        if (string.IsNullOrWhiteSpace(dto.FitnessGoal))
+        {
+            errors.Add("Goal (fitnessGoal) is required.");
+        }
+
+        if (!dto.Dob.HasValue)
+        {
+            errors.Add("Date of birth (dob) is required.");
+        }
+        else
+        {
+            var today = DateOnly.FromDateTime(DateTime.UtcNow);
+            var age = today.Year - dto.Dob.Value.Year;
+            if (dto.Dob.Value > today.AddYears(-age)) age--;
+            if (age < 10 || age > 100)
+            {
+                errors.Add("Age must be between 10 and 100 years.");
+            }
+        }
+
         AddRange(errors, dto.HeightCm, 80, 250, "heightCm must be between 80 and 250.");
         AddRange(errors, dto.WeightKg, 25, 300, "weightKg must be between 25 and 300.");
         AddRange(errors, dto.TargetWeightKg, 25, 300, "targetWeightKg must be between 25 and 300.");

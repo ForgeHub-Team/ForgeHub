@@ -19,6 +19,9 @@ import { TrainingProgressCard } from "@/components/ui/TrainingProgressCard";
 import { WeeklyActivityCard } from "@/components/ui/WeeklyActivityCard";
 import { useForgeTheme } from "@/theme/theme";
 import { parseApiError } from "@/utils/errors";
+import { HealthInfoCard } from "./HealthInfoCard";
+import { EmergencyInfoCard } from "./EmergencyInfoCard";
+import { DigitalMembershipCard } from "./DigitalMembershipCard";
 
 export function ProfileScreen() {
   const theme = useForgeTheme();
@@ -83,101 +86,135 @@ export function ProfileScreen() {
     }
   };
 
+  const [activeTab, setActiveTab] = useState<"overview" | "history" | "health">("overview");
+
   return (
     <ForgeScreen title="Profile" subtitle={user?.fullName ?? "Member profile"} refreshing={profileQuery.isRefetching || homeQuery.isRefetching || dashboardQuery.isRefetching || workoutsQuery.isRefetching} onRefresh={() => { profileQuery.refetch(); homeQuery.refetch(); dashboardQuery.refetch(); workoutsQuery.refetch(); }}>
       {profileQuery.isLoading ? <LoadingState /> : null}
       {profileQuery.error ? <ErrorState error={profileQuery.error} onRetry={() => profileQuery.refetch()} /> : null}
+      
       <View style={styles.settingsRow}>
         <View />
         <Pressable onPress={() => router.push("/settings")} style={[styles.settingsButton, { backgroundColor: theme.surface2, borderColor: theme.border }]}>
           <MaterialCommunityIcons name="cog-outline" size={22} color={theme.text} />
         </Pressable>
       </View>
-      <View style={styles.identity}>
-        <View style={[styles.avatarRing, { borderColor: theme.primary, shadowColor: theme.primary }]}>
-          {photoUri ? (
-            <Image source={{ uri: photoUri }} style={styles.avatar} />
+
+      <DigitalMembershipCard user={user} profile={profile ?? null} membership={membership ?? null} />
+
+      <ForgeButton
+        title="Edit Profile"
+        onPress={() => router.push("/profile/edit")}
+        style={{ marginVertical: 10 }}
+      />
+
+      <View style={styles.tabsContainer}>
+        {(["overview", "history", "health"] as const).map((tab) => (
+          <Pressable
+            key={tab}
+            onPress={() => setActiveTab(tab)}
+            style={[
+              styles.tabButton,
+              activeTab === tab 
+                ? { backgroundColor: theme.primary, borderColor: theme.primary } 
+                : { backgroundColor: theme.surface2, borderColor: theme.border }
+            ]}
+          >
+            <Text
+              style={[
+                styles.tabText,
+                { color: activeTab === tab ? "#FFFFFF" : theme.text }
+              ]}
+            >
+              {tab === "overview" ? "Overview" : tab === "history" ? "History" : "Health & Settings"}
+            </Text>
+          </Pressable>
+        ))}
+      </View>
+
+      {activeTab === "overview" && (
+        <View style={{ gap: 16 }}>
+          <View style={styles.kpiGrid}>
+            <KpiCard icon="dumbbell" label="Total Workouts" value={dashboard?.totalWorkouts ?? 0} badge={formatPercentBadge(dashboard?.workoutsChangePercent)} />
+            <KpiCard icon="clock-outline" label="Total Hours" value={dashboard?.totalHours ?? 0} badge={formatPercentBadge(dashboard?.hoursChangePercent)} />
+            <KpiCard icon="calendar-check-outline" label="Classes Attended" value={dashboard?.classesAttended ?? 0} badge={formatPercentBadge(dashboard?.classesChangePercent)} />
+            <KpiCard icon="card-account-details-star-outline" label="Membership Days" value={dashboard?.membershipRemainingDays ?? membership?.remainingDays ?? user?.remainingDays ?? 0} badge={dashboard?.membershipStatus ?? membership?.status ?? user?.membershipStatus ?? undefined} />
+          </View>
+
+          <WeeklyActivityCard activity={dashboard?.weeklyActivity ?? []} averageMinutes={dashboard?.averageTrainingMinutes} />
+          {homeQuery.data?.stats ? <TrainingProgressCard stats={homeQuery.data.stats} activity={homeQuery.data.activityHeatmap ?? []} /> : null}
+        </View>
+      )}
+
+      {activeTab === "history" && (
+        <ForgeCard style={styles.section}>
+          <Text style={[styles.sectionTitle, { color: theme.text }]}>Recent Workouts</Text>
+          {workoutsQuery.isLoading ? (
+            <Text style={{ color: theme.muted, fontWeight: "700" }}>Loading workouts...</Text>
+          ) : recentWorkouts.length === 0 ? (
+            <Text style={{ color: theme.muted, fontWeight: "700" }}>No workouts logged yet.</Text>
           ) : (
-            <View style={[styles.avatarFallback, { backgroundColor: theme.surface2 }]}>
-              <MaterialCommunityIcons name="account" color={theme.primary} size={54} />
+            <View style={{ gap: 10 }}>
+              {recentWorkouts.map((workout) => {
+                const formattedDate = (() => {
+                  try {
+                    const d = new Date(workout.completedAt);
+                    return d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+                  } catch {
+                    return workout.completedAt;
+                  }
+                })();
+                const durationText = (() => {
+                  const mins = Math.floor(workout.durationSeconds / 60);
+                  const secs = workout.durationSeconds % 60;
+                  return mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
+                })();
+                return (
+                  <View key={workout.id} style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: theme.border }}>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                      <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: theme.surface2, alignItems: "center", justifyContent: "center" }}>
+                        <MaterialCommunityIcons name="dumbbell" color={theme.primary} size={18} />
+                      </View>
+                      <View>
+                        <Text style={{ color: theme.text, fontWeight: "900", fontSize: 14 }}>Workout Session</Text>
+                        <Text style={{ color: theme.muted, fontWeight: "700", fontSize: 12 }}>{formattedDate}</Text>
+                      </View>
+                    </View>
+                    <Text style={{ color: theme.primary, fontWeight: "900", fontSize: 14 }}>{durationText}</Text>
+                  </View>
+                );
+              })}
             </View>
           )}
+        </ForgeCard>
+      )}
+
+      {activeTab === "health" && (
+        <View style={{ gap: 16 }}>
+          {profile && <HealthInfoCard profile={profile} />}
+          {profile && <EmergencyInfoCard profile={profile} />}
+
+          <ForgeCard style={styles.section}>
+            <Text style={[styles.sectionTitle, { color: theme.text }]}>Profile photo</Text>
+            {pendingPhoto ? <Text style={[styles.previewText, { color: theme.primary }]}>Preview selected. Upload to save it to your account.</Text> : null}
+            <View style={styles.photoActions}>
+              <ForgeButton title={pendingPhoto ? "Upload" : "Upload"} variant={pendingPhoto ? "primary" : "secondary"} disabled={photoMutation.isPending} onPress={() => pendingPhoto ? photoMutation.mutate(pendingPhoto) : pickPhoto("library")} style={styles.flex} />
+              <ForgeButton title="Camera" variant="secondary" disabled={photoMutation.isPending} onPress={() => pickPhoto("camera")} style={styles.flex} />
+              <ForgeButton title={pendingPhoto ? "Cancel" : "Remove"} variant="secondary" disabled={(!pendingPhoto && !persistedPhotoUrl) || removeMutation.isPending} onPress={() => pendingPhoto ? setPendingPhoto(null) : removeMutation.mutate()} style={styles.flex} />
+            </View>
+            {(photoMutation.error || removeMutation.error) ? <Text style={[styles.error, { color: theme.danger }]}>{parseApiError(photoMutation.error ?? removeMutation.error).message}</Text> : null}
+          </ForgeCard>
+
+          <ForgeCard style={styles.section}>
+            <Text style={[styles.sectionTitle, { color: theme.text }]}>Security and settings</Text>
+            <Text style={[styles.rowText, { color: theme.muted }]}>{user?.email || "Email unavailable"}</Text>
+            <Text style={[styles.rowText, { color: theme.muted }]}>Status: {membership?.status ?? user?.membershipStatus ?? "Unknown"}</Text>
+            {dashboardQuery.error ? <Text style={[styles.subtleError, { color: theme.muted }]}>Some profile statistics are temporarily unavailable.</Text> : null}
+            <ForgeButton title="Security and settings" variant="secondary" onPress={() => router.push("/settings")} />
+            <ForgeButton title="Logout" variant="danger" onPress={signOut} />
+          </ForgeCard>
         </View>
-        <Text style={[styles.name, { color: theme.text }]}>{user?.fullName ?? "ForgeHub Member"}</Text>
-        <Text style={[styles.badge, { color: theme.primary, borderColor: theme.border, backgroundColor: theme.surface }]}>
-          {membership?.planName || user?.membershipPlan || user?.membershipStatus || "Membership unavailable"}
-        </Text>
-        <Text style={[styles.meta, { color: theme.muted }]}>Member since {membership?.currentMembership?.startDate ?? "Not available"}</Text>
-      </View>
-
-      {pendingPhoto ? <Text style={[styles.previewText, { color: theme.primary }]}>Preview selected. Upload to save it to your account.</Text> : null}
-      <View style={styles.photoActions}>
-        <ForgeButton title={pendingPhoto ? "Upload" : "Upload"} variant={pendingPhoto ? "primary" : "secondary"} disabled={photoMutation.isPending} onPress={() => pendingPhoto ? photoMutation.mutate(pendingPhoto) : pickPhoto("library")} style={styles.flex} />
-        <ForgeButton title="Camera" variant="secondary" disabled={photoMutation.isPending} onPress={() => pickPhoto("camera")} style={styles.flex} />
-        <ForgeButton title={pendingPhoto ? "Cancel" : "Remove"} variant="secondary" disabled={(!pendingPhoto && !persistedPhotoUrl) || removeMutation.isPending} onPress={() => pendingPhoto ? setPendingPhoto(null) : removeMutation.mutate()} style={styles.flex} />
-      </View>
-      {(photoMutation.error || removeMutation.error) ? <Text style={[styles.error, { color: theme.danger }]}>{parseApiError(photoMutation.error ?? removeMutation.error).message}</Text> : null}
-      <ForgeButton title="Edit profile" onPress={() => router.push("/profile/edit")} />
-
-      <View style={styles.kpiGrid}>
-        <KpiCard icon="dumbbell" label="Total Workouts" value={dashboard?.totalWorkouts ?? 0} badge={formatPercentBadge(dashboard?.workoutsChangePercent)} />
-        <KpiCard icon="clock-outline" label="Total Hours" value={dashboard?.totalHours ?? 0} badge={formatPercentBadge(dashboard?.hoursChangePercent)} />
-        <KpiCard icon="calendar-check-outline" label="Classes Attended" value={dashboard?.classesAttended ?? 0} badge={formatPercentBadge(dashboard?.classesChangePercent)} />
-        <KpiCard icon="card-account-details-star-outline" label="Membership Days" value={dashboard?.membershipRemainingDays ?? membership?.remainingDays ?? user?.remainingDays ?? 0} badge={dashboard?.membershipStatus ?? membership?.status ?? user?.membershipStatus ?? undefined} />
-      </View>
-
-      <WeeklyActivityCard activity={dashboard?.weeklyActivity ?? []} averageMinutes={dashboard?.averageTrainingMinutes} />
-      {homeQuery.data?.stats ? <TrainingProgressCard stats={homeQuery.data.stats} activity={homeQuery.data.activityHeatmap ?? []} /> : null}
-
-      <ForgeCard style={styles.section}>
-        <Text style={[styles.sectionTitle, { color: theme.text }]}>Recent Workouts</Text>
-        {workoutsQuery.isLoading ? (
-          <Text style={{ color: theme.muted, fontWeight: "700" }}>Loading workouts...</Text>
-        ) : recentWorkouts.length === 0 ? (
-          <Text style={{ color: theme.muted, fontWeight: "700" }}>No workouts logged yet.</Text>
-        ) : (
-          <View style={{ gap: 10 }}>
-            {recentWorkouts.map((workout) => {
-              const formattedDate = (() => {
-                try {
-                  const d = new Date(workout.completedAt);
-                  return d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
-                } catch {
-                  return workout.completedAt;
-                }
-              })();
-              const durationText = (() => {
-                const mins = Math.floor(workout.durationSeconds / 60);
-                const secs = workout.durationSeconds % 60;
-                return mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
-              })();
-              return (
-                <View key={workout.id} style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: theme.border }}>
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-                    <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: theme.surface2, alignItems: "center", justifyContent: "center" }}>
-                      <MaterialCommunityIcons name="dumbbell" color={theme.primary} size={18} />
-                    </View>
-                    <View>
-                      <Text style={{ color: theme.text, fontWeight: "900", fontSize: 14 }}>Workout Session</Text>
-                      <Text style={{ color: theme.muted, fontWeight: "700", fontSize: 12 }}>{formattedDate}</Text>
-                    </View>
-                  </View>
-                  <Text style={{ color: theme.primary, fontWeight: "900", fontSize: 14 }}>{durationText}</Text>
-                </View>
-              );
-            })}
-          </View>
-        )}
-      </ForgeCard>
-
-      <ForgeCard style={styles.section}>
-        <Text style={[styles.sectionTitle, { color: theme.text }]}>Security and settings</Text>
-        <Text style={[styles.rowText, { color: theme.muted }]}>{user?.email || "Email unavailable"}</Text>
-        <Text style={[styles.rowText, { color: theme.muted }]}>Status: {membership?.status ?? user?.membershipStatus ?? "Unknown"}</Text>
-        {dashboardQuery.error ? <Text style={[styles.subtleError, { color: theme.muted }]}>Some profile statistics are temporarily unavailable.</Text> : null}
-        <ForgeButton title="Security and settings" variant="secondary" onPress={() => router.push("/settings")} />
-        <ForgeButton title="Logout" variant="danger" onPress={signOut} />
-      </ForgeCard>
+      )}
     </ForgeScreen>
   );
 }
@@ -234,5 +271,22 @@ const styles = StyleSheet.create({
   rowText: { fontWeight: "700", lineHeight: 20 },
   previewText: { fontWeight: "900", textAlign: "center", lineHeight: 20 },
   subtleError: { fontWeight: "700", lineHeight: 20 },
-  error: { fontWeight: "800", lineHeight: 20 }
+  error: { fontWeight: "800", lineHeight: 20 },
+  tabsContainer: {
+    flexDirection: "row",
+    paddingVertical: 10,
+    gap: 8
+  },
+  tabButton: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1
+  },
+  tabText: {
+    fontSize: 13,
+    fontWeight: "800"
+  }
 });

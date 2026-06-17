@@ -453,7 +453,8 @@ public class AuthController : ControllerBase
             RemainingDays = remainingDays,
             GymLatitude = branch?.Lat ?? 0,
             GymLongitude = branch?.Lng ?? 0,
-            GeofenceRadiusMeters = (int)Math.Round(((branch?.RangeKm ?? 0m) * 1000m))
+            GeofenceRadiusMeters = (int)Math.Round(((branch?.RangeKm ?? 0m) * 1000m)),
+            QrCode = member?.QrCode
         });
     }
 }

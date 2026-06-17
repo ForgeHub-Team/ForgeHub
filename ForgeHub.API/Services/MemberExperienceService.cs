@@ -2,6 +2,7 @@ using ForgeHub.API.Data;
 using ForgeHub.API.DTOs;
 using ForgeHub.API.Helpers;
 using ForgeHub.API.Models;
+using ForgeHub.API.Security;
 using Microsoft.EntityFrameworkCore;
 
 namespace ForgeHub.API.Services;
@@ -101,19 +102,40 @@ public class MemberExperienceService
         var deviceApproved = await _context.DeviceApprovals
             .AnyAsync(item => item.UserId == user.Id && item.IsApproved);
 
+        var member = await _context.Members
+            .FirstOrDefaultAsync(m => m.UserId == user.Id);
+
+        var membership = member == null
+            ? null
+            : await _context.MemberMemberships
+                .Include(mm => mm.Plan)
+                .FirstOrDefaultAsync(mm => mm.MemberId == member.Id);
+
+        var now = DateOnly.FromDateTime(DateTime.UtcNow);
+        var remainingDays = membership?.EndDate is null
+            ? 0
+            : Math.Max(0, membership.EndDate.Value.DayNumber - now.DayNumber);
+
         return new AuthResponseDto
         {
             AccessToken = accessToken,
             RefreshToken = refreshToken,
             UserId = user.Id,
+            MemberId = member?.Id,
             FullName = user.FullName ?? string.Empty,
             Email = user.Email ?? string.Empty,
             ProfilePhotoUrl = user.ProfilePhotoUrl,
             Role = role.Name,
-            GymId = user.GymId,
+            GymId = user.GymId ?? member?.GymId,
             BranchId = user.BranchId,
+            HomeBranchId = member?.HomeBranchId,
+            MembershipActive = AppStatuses.IsActiveMembership(membership?.Status),
+            MembershipPlan = membership?.Plan?.Name ?? string.Empty,
+            MembershipStatus = membership?.Status ?? AppStatuses.MembershipPending,
+            RemainingDays = remainingDays,
             RequiresOtp = false,
-            DeviceApproved = deviceApproved
+            DeviceApproved = deviceApproved,
+            QrCode = member?.QrCode
         };
     }
 

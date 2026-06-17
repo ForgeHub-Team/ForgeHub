@@ -1,4 +1,4 @@
-import { Pressable, StyleSheet, Text, ViewStyle } from "react-native";
+import { Pressable, StyleSheet, Text, ViewStyle, ActivityIndicator } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { useForgeTheme } from "@/theme/theme";
 
@@ -7,16 +7,26 @@ interface Props {
   onPress?: () => void;
   variant?: "primary" | "secondary" | "danger";
   disabled?: boolean;
+  loading?: boolean;
   style?: ViewStyle;
 }
 
-export function ForgeButton({ title, onPress, variant = "primary", disabled, style }: Props) {
+export function ForgeButton({ title, onPress, variant = "primary", disabled, loading, style }: Props) {
   const theme = useForgeTheme();
-  const label = <Text style={[styles.text, variant !== "primary" && { color: theme.text }]}>{title}</Text>;
+  
+  const spinnerColor = variant === "secondary" ? theme.text : "#FFFFFF";
+  const content = loading ? (
+    <ActivityIndicator size="small" color={spinnerColor} />
+  ) : (
+    <Text style={[styles.text, variant !== "primary" && { color: theme.text }]}>{title}</Text>
+  );
+
+  const isButtonDisabled = disabled || loading;
+
   return (
     <Pressable
       onPress={onPress}
-      disabled={disabled}
+      disabled={isButtonDisabled}
       style={({ pressed }) => [
         styles.base,
         variant !== "primary" && {
@@ -24,16 +34,16 @@ export function ForgeButton({ title, onPress, variant = "primary", disabled, sty
           borderWidth: variant === "secondary" ? 1 : 0,
           borderColor: theme.border
         },
-        disabled && styles.disabled,
-        pressed && !disabled && styles.pressed,
+        isButtonDisabled && styles.disabled,
+        pressed && !isButtonDisabled && styles.pressed,
         style
       ]}
     >
       {variant === "primary" ? (
         <LinearGradient colors={[theme.primary, theme.primaryDark]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.gradient}>
-          {label}
+          {content}
         </LinearGradient>
-      ) : label}
+      ) : content}
     </Pressable>
   );
 }

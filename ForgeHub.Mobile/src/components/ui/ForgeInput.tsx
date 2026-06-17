@@ -9,9 +9,10 @@ interface Props extends TextInputProps {
   passwordToggle?: boolean;
   passwordVisible?: boolean;
   onTogglePassword?: () => void;
+  rightIcon?: React.ComponentProps<typeof MaterialCommunityIcons>["name"];
 }
 
-export const ForgeInput = forwardRef<TextInput, Props>(({ label, error, style, passwordToggle, passwordVisible, onTogglePassword, ...props }, ref) => {
+export const ForgeInput = forwardRef<TextInput, Props>(({ label, error, style, passwordToggle, passwordVisible, onTogglePassword, rightIcon, ...props }, ref) => {
   const theme = useForgeTheme();
   return (
     <View style={styles.wrap}>
@@ -20,7 +21,7 @@ export const ForgeInput = forwardRef<TextInput, Props>(({ label, error, style, p
         <TextInput
           ref={ref}
           placeholderTextColor={theme.muted}
-          style={[styles.input, { color: theme.text }, passwordToggle && styles.inputWithIcon, style]}
+          style={[styles.input, { color: theme.text }, (passwordToggle || rightIcon) && styles.inputWithIcon, style]}
           secureTextEntry={passwordToggle ? !passwordVisible : props.secureTextEntry}
           {...props}
         />
@@ -28,6 +29,10 @@ export const ForgeInput = forwardRef<TextInput, Props>(({ label, error, style, p
           <Pressable onPress={onTogglePassword} style={styles.eye} hitSlop={8}>
             <MaterialCommunityIcons name={passwordVisible ? "eye-off-outline" : "eye-outline"} color={theme.muted} size={22} />
           </Pressable>
+        ) : rightIcon ? (
+          <View style={styles.eye}>
+            <MaterialCommunityIcons name={rightIcon} color={theme.muted} size={22} />
+          </View>
         ) : null}
       </View>
       {error ? <Text style={[styles.error, { color: theme.danger }]}>{error}</Text> : null}
