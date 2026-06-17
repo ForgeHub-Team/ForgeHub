@@ -39,6 +39,7 @@ public class ApplicationDbContext : DbContext
     public DbSet<WorkoutSession> WorkoutSessions { get; set; }
     public DbSet<MemberProfile> MemberProfiles { get; set; }
     public DbSet<GymSubscription> GymSubscriptions { get; set; }
+    public DbSet<DietPlan> DietPlans { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
