@@ -12,8 +12,9 @@ export async function getProfileDashboard(): Promise<ProfileDashboardStats> {
   return getJson<ProfileDashboardStats>(endpoints.profileDashboard);
 }
 
-export async function updateProfile(profile: MemberProfile): Promise<MemberProfile> {
-  return mapProfile(await putJson(endpoints.profile, profile));
+export async function updateProfile(profile: MemberProfile, tab?: string): Promise<MemberProfile> {
+  const url = tab ? `${endpoints.profile}?tab=${tab}` : endpoints.profile;
+  return mapProfile(await putJson(url, profile));
 }
 
 export async function uploadProfilePhoto(asset: { uri: string; fileName?: string | null; mimeType?: string | null }): Promise<{ profilePhotoUrl: string | null }> {

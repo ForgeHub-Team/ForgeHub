@@ -39,7 +39,7 @@ public class MemberProfileController : ControllerBase
     }
 
     [HttpPut]
-    public async Task<IActionResult> Update([FromBody] UpdateMemberProfileDto dto)
+    public async Task<IActionResult> Update([FromBody] UpdateMemberProfileDto dto, [FromQuery] string? tab = null)
     {
         var member = await GetCurrentMember();
         if (member == null)
@@ -50,22 +50,25 @@ public class MemberProfileController : ControllerBase
         var profile = await GetOrCreateProfile(member.Id);
 
         // Self-heal/populate missing fields from existing records to support tab-by-tab saving
-        if (!dto.Dob.HasValue)
+        if (string.IsNullOrEmpty(tab) || tab == "preferences")
         {
-            dto.Dob = member.Dob ?? DateOnly.FromDateTime(DateTime.UtcNow.AddYears(-25));
-        }
-        if (string.IsNullOrWhiteSpace(dto.FitnessGoal))
-        {
-            dto.FitnessGoal = profile.FitnessGoal ?? "General Fitness";
+            if (!dto.Dob.HasValue)
+            {
+                dto.Dob = member.Dob ?? DateOnly.FromDateTime(DateTime.UtcNow.AddYears(-25));
+            }
+            if (string.IsNullOrWhiteSpace(dto.FitnessGoal))
+            {
+                dto.FitnessGoal = profile.FitnessGoal ?? "General Fitness";
+            }
         }
 
-        var validation = ValidateProfile(dto);
+        var validation = ValidateProfile(dto, tab);
         if (validation.Count > 0)
         {
             return BadRequest(new { message = "Profile validation failed.", errors = validation });
         }
 
-        ApplyUpdate(profile, member, dto);
+        ApplyUpdate(profile, member, dto, tab);
         await _context.SaveChangesAsync();
 
         var trainerName = await GetTrainerNameAsync(member.Id);
@@ -312,44 +315,52 @@ public class MemberProfileController : ControllerBase
         UpdatedAt = profile.UpdatedAt
     };
 
-    private static void ApplyUpdate(MemberProfile profile, Member member, UpdateMemberProfileDto dto)
+    private static void ApplyUpdate(MemberProfile profile, Member member, UpdateMemberProfileDto dto, string? tab)
     {
-        profile.HeightCm = dto.HeightCm;
-        profile.WeightKg = dto.WeightKg;
-        profile.FitnessGoal = Trim(dto.FitnessGoal);
-        profile.TargetWeightKg = dto.TargetWeightKg;
-        // BodyFatPercentage and circumferences are trainer-managed / read-only for members.
-        profile.ActivityLevel = Trim(dto.ActivityLevel);
-        profile.TrainingExperience = Trim(dto.TrainingExperience);
-        profile.FavoriteWorkoutType = Trim(dto.FavoriteWorkoutType);
-        profile.PreferredTrainingDays = Trim(dto.PreferredTrainingDays);
-        profile.PreferredWorkoutTime = Trim(dto.PreferredWorkoutTime);
-        // BloodType is trainer-verified / read-only for members.
-        profile.MedicalConditions = Trim(dto.MedicalConditions);
-        profile.Allergies = Trim(dto.Allergies);
-        profile.Injuries = Trim(dto.Injuries);
-        profile.Medications = Trim(dto.Medications);
-        profile.DoctorClearanceRequired = dto.DoctorClearanceRequired;
-        profile.HealthNotes = Trim(dto.HealthNotes);
-        profile.EmergencyContactName = Trim(dto.EmergencyContactName);
-        profile.EmergencyContactRelationship = Trim(dto.EmergencyContactRelationship);
-        profile.EmergencyContactPhone = Trim(dto.EmergencyContactPhone);
-        profile.EmergencyContactAltPhone = Trim(dto.EmergencyContactAltPhone);
-        profile.DailyCaloriesTarget = dto.DailyCaloriesTarget;
-        profile.ProteinTargetGrams = dto.ProteinTargetGrams;
-        profile.CarbsTargetGrams = dto.CarbsTargetGrams;
-        profile.FatTargetGrams = dto.FatTargetGrams;
-        profile.WaterTargetMl = dto.WaterTargetMl;
-        profile.Language = Trim(dto.Language);
-        profile.Theme = Trim(dto.Theme);
-        profile.MeasurementUnit = Trim(dto.MeasurementUnit);
-        profile.NotificationsEnabled = dto.NotificationsEnabled;
-        profile.ProfilePhotoUrl = Trim(dto.ProfilePhotoUrl);
+        if (string.IsNullOrEmpty(tab) || tab == "measurements")
+        {
+            profile.HeightCm = dto.HeightCm;
+            profile.WeightKg = dto.WeightKg;
+            profile.TargetWeightKg = dto.TargetWeightKg;
+            profile.DailyCaloriesTarget = dto.DailyCaloriesTarget;
+            profile.ProteinTargetGrams = dto.ProteinTargetGrams;
+            profile.CarbsTargetGrams = dto.CarbsTargetGrams;
+            profile.FatTargetGrams = dto.FatTargetGrams;
+            profile.WaterTargetMl = dto.WaterTargetMl;
+            
+            // Non-tab specific fields like unit/theme/language can be updated anytime if sent
+            if (dto.MeasurementUnit != null) profile.MeasurementUnit = Trim(dto.MeasurementUnit);
+            if (dto.Theme != null) profile.Theme = Trim(dto.Theme);
+            if (dto.Language != null) profile.Language = Trim(dto.Language);
+        }
+
+        if (string.IsNullOrEmpty(tab) || tab == "preferences")
+        {
+            profile.FitnessGoal = Trim(dto.FitnessGoal);
+            profile.ActivityLevel = Trim(dto.ActivityLevel);
+            profile.TrainingExperience = Trim(dto.TrainingExperience);
+            profile.FavoriteWorkoutType = Trim(dto.FavoriteWorkoutType);
+            profile.PreferredTrainingDays = Trim(dto.PreferredTrainingDays);
+            profile.PreferredWorkoutTime = Trim(dto.PreferredWorkoutTime);
+            member.Dob = dto.Dob;
+            member.Gender = Trim(dto.Gender);
+        }
+
+        if (string.IsNullOrEmpty(tab) || tab == "health")
+        {
+            profile.MedicalConditions = Trim(dto.MedicalConditions);
+            profile.Allergies = Trim(dto.Allergies);
+            profile.Injuries = Trim(dto.Injuries);
+            profile.Medications = Trim(dto.Medications);
+            profile.DoctorClearanceRequired = dto.DoctorClearanceRequired;
+            profile.HealthNotes = Trim(dto.HealthNotes);
+            profile.EmergencyContactName = Trim(dto.EmergencyContactName);
+            profile.EmergencyContactRelationship = Trim(dto.EmergencyContactRelationship);
+            profile.EmergencyContactPhone = Trim(dto.EmergencyContactPhone);
+            profile.EmergencyContactAltPhone = Trim(dto.EmergencyContactAltPhone);
+        }
+
         profile.UpdatedAt = DateTime.UtcNow;
-
-        member.Dob = dto.Dob;
-        member.Gender = Trim(dto.Gender);
-
         profile.ProfileCompletionPercentage = CalculateCompletion(profile);
     }
 
@@ -419,50 +430,60 @@ public class MemberProfileController : ControllerBase
         };
     }
 
-    private static List<string> ValidateProfile(UpdateMemberProfileDto dto)
+    private static List<string> ValidateProfile(UpdateMemberProfileDto dto, string? tab)
     {
         var errors = new List<string>();
 
-        if (string.IsNullOrWhiteSpace(dto.FitnessGoal))
+        if (string.IsNullOrEmpty(tab) || tab == "preferences")
         {
-            errors.Add("Goal (fitnessGoal) is required.");
-        }
-
-        if (!dto.Dob.HasValue)
-        {
-            errors.Add("Date of birth (dob) is required.");
-        }
-        else
-        {
-            var today = DateOnly.FromDateTime(DateTime.UtcNow);
-            var age = today.Year - dto.Dob.Value.Year;
-            if (dto.Dob.Value > today.AddYears(-age)) age--;
-            if (age < 10 || age > 100)
+            if (string.IsNullOrWhiteSpace(dto.FitnessGoal))
             {
-                errors.Add("Age must be between 10 and 100 years.");
+                errors.Add("Goal (fitnessGoal) is required.");
+            }
+
+            if (!dto.Dob.HasValue)
+            {
+                errors.Add("Date of birth (dob) is required.");
+            }
+            else
+            {
+                var today = DateOnly.FromDateTime(DateTime.UtcNow);
+                var age = today.Year - dto.Dob.Value.Year;
+                if (dto.Dob.Value > today.AddYears(-age)) age--;
+                if (age < 10 || age > 100)
+                {
+                    errors.Add("Age must be between 10 and 100 years.");
+                }
             }
         }
 
-        AddRange(errors, dto.HeightCm, 80, 250, "heightCm must be between 80 and 250.");
-        AddRange(errors, dto.WeightKg, 25, 300, "weightKg must be between 25 and 300.");
-        AddRange(errors, dto.TargetWeightKg, 25, 300, "targetWeightKg must be between 25 and 300.");
-        AddRange(errors, dto.BodyFatPercentage, 3, 70, "bodyFatPercentage must be between 3 and 70.");
-        foreach (var (value, name) in new[]
+        if (string.IsNullOrEmpty(tab) || tab == "measurements")
         {
-            (dto.WaistCm, "waistCm"), (dto.ChestCm, "chestCm"), (dto.ShoulderCm, "shoulderCm"),
-            (dto.HipCm, "hipCm"), (dto.NeckCm, "neckCm"), (dto.ArmCm, "armCm"), (dto.ThighCm, "thighCm")
-        })
-        {
-            AddRange(errors, value, 1, 300, $"{name} must be positive and reasonable.");
+            AddRange(errors, dto.HeightCm, 80, 250, "heightCm must be between 80 and 250.");
+            AddRange(errors, dto.WeightKg, 25, 300, "weightKg must be between 25 and 300.");
+            AddRange(errors, dto.TargetWeightKg, 25, 300, "targetWeightKg must be between 25 and 300.");
+            AddRange(errors, dto.BodyFatPercentage, 3, 70, "bodyFatPercentage must be between 3 and 70.");
+            foreach (var (value, name) in new[]
+            {
+                (dto.WaistCm, "waistCm"), (dto.ChestCm, "chestCm"), (dto.ShoulderCm, "shoulderCm"),
+                (dto.HipCm, "hipCm"), (dto.NeckCm, "neckCm"), (dto.ArmCm, "armCm"), (dto.ThighCm, "thighCm")
+            })
+            {
+                AddRange(errors, value, 1, 300, $"{name} must be positive and reasonable.");
+            }
         }
 
-        if (!string.IsNullOrWhiteSpace(dto.BloodType) && !BloodTypes.Contains(dto.BloodType.Trim().ToUpperInvariant()))
+        if (string.IsNullOrEmpty(tab) || tab == "health")
         {
-            errors.Add("bloodType must be one of A+, A-, B+, B-, AB+, AB-, O+, O-.");
+            if (!string.IsNullOrWhiteSpace(dto.BloodType) && !BloodTypes.Contains(dto.BloodType.Trim().ToUpperInvariant()))
+            {
+                errors.Add("bloodType must be one of A+, A-, B+, B-, AB+, AB-, O+, O-.");
+            }
+
+            ValidatePhone(errors, dto.EmergencyContactPhone, "emergencyContactPhone");
+            ValidatePhone(errors, dto.EmergencyContactAltPhone, "emergencyContactAltPhone");
         }
 
-        ValidatePhone(errors, dto.EmergencyContactPhone, "emergencyContactPhone");
-        ValidatePhone(errors, dto.EmergencyContactAltPhone, "emergencyContactAltPhone");
         return errors;
     }
 

@@ -4,6 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View, Modal, Pressable } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { router } from "expo-router";
 import { getProfile, updateProfile } from "@/api/profileApi";
 import { ForgeScreen } from "@/components/layout/ForgeScreen";
 import { ErrorState } from "@/components/ui/ErrorState";
@@ -191,7 +192,7 @@ export function EditProfileScreen() {
   }, [activeTab]);
 
   const mutation = useMutation({
-    mutationFn: updateProfile,
+    mutationFn: ({ profile, tab }: { profile: MemberProfile; tab?: string }) => updateProfile(profile, tab),
     onSuccess: (profile) => {
       reset(profile as ProfileFormValues);
       queryClient.invalidateQueries({ queryKey: ["profile"] });
@@ -204,6 +205,8 @@ export function EditProfileScreen() {
         setActiveTab("preferences");
       } else if (activeTabRef.current === "preferences") {
         setActiveTab("health");
+      } else if (activeTabRef.current === "health") {
+        router.back();
       }
     },
     onError: (error) => {
@@ -244,7 +247,7 @@ export function EditProfileScreen() {
     }
 
     const values = getValues();
-    mutation.mutate(values as unknown as MemberProfile);
+    mutation.mutate({ profile: values as unknown as MemberProfile, tab: activeTab });
   };
 
   return (
