@@ -166,6 +166,7 @@ if (seedDatabase)
     }
 }
 
+app.UseCors("DevCors");
 app.UseMiddleware<ExceptionHandlingMiddleware>();
 app.UseSwagger();
 app.UseSwaggerUI();
@@ -179,7 +180,6 @@ if (!app.Environment.IsDevelopment())
 {
     app.UseHttpsRedirection();
 }
-app.UseCors("DevCors");
 app.UseStaticFiles();
 
 app.UseAuthentication();

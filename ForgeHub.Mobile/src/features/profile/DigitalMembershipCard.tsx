@@ -110,12 +110,12 @@ export function DigitalMembershipCard({ user, profile, membership }: Props) {
                   )}
                   <View style={styles.nameContainer}>
                     <Text numberOfLines={1} style={styles.memberName}>{name}</Text>
-                    <Text style={[styles.memberIdText, { color: theme.muted }]}>{memberNumber}</Text>
+                    <Text style={[styles.memberIdText, { color: theme.mode === "light" ? "rgba(255,255,255,0.6)" : theme.muted }]}>{memberNumber}</Text>
                   </View>
                 </View>
                 
                 <View style={styles.planContainer}>
-                  <Text style={[styles.labelTitle, { color: theme.muted }]}>MEMBERSHIP PLAN</Text>
+                  <Text style={[styles.labelTitle, { color: theme.mode === "light" ? "rgba(255,255,255,0.6)" : theme.muted }]}>MEMBERSHIP PLAN</Text>
                   <Text style={styles.planValue} numberOfLines={1}>{planName}</Text>
                 </View>
               </View>
@@ -156,19 +156,19 @@ export function DigitalMembershipCard({ user, profile, membership }: Props) {
             {/* Grid details */}
             <View style={styles.detailsGrid}>
               <View style={styles.detailItem}>
-                <Text style={[styles.backLabel, { color: theme.muted }]}>JOIN DATE</Text>
+                <Text style={[styles.backLabel, { color: theme.mode === "light" ? "rgba(255,255,255,0.6)" : theme.muted }]}>JOIN DATE</Text>
                 <Text style={styles.backValue}>{membership?.currentMembership?.startDate ?? "N/A"}</Text>
               </View>
               <View style={styles.detailItem}>
-                <Text style={[styles.backLabel, { color: theme.muted }]}>EXPIRY DATE</Text>
+                <Text style={[styles.backLabel, { color: theme.mode === "light" ? "rgba(255,255,255,0.6)" : theme.muted }]}>EXPIRY DATE</Text>
                 <Text style={styles.backValue}>{membership?.currentMembership?.endDate ?? "No Active Plan"}</Text>
               </View>
               <View style={styles.detailItem}>
-                <Text style={[styles.backLabel, { color: theme.muted }]}>ASSIGNED TRAINER</Text>
+                <Text style={[styles.backLabel, { color: theme.mode === "light" ? "rgba(255,255,255,0.6)" : theme.muted }]}>ASSIGNED TRAINER</Text>
                 <Text style={styles.backValue} numberOfLines={1}>{profile?.trainerName ?? "None Assigned"}</Text>
               </View>
               <View style={styles.detailItem}>
-                <Text style={[styles.backLabel, { color: theme.muted }]}>HOME BRANCH</Text>
+                <Text style={[styles.backLabel, { color: theme.mode === "light" ? "rgba(255,255,255,0.6)" : theme.muted }]}>HOME BRANCH</Text>
                 <Text style={styles.backValue} numberOfLines={1}>{user?.branchName ?? "Main Branch"}</Text>
               </View>
             </View>
@@ -179,14 +179,14 @@ export function DigitalMembershipCard({ user, profile, membership }: Props) {
                 <MaterialCommunityIcons name="phone-alert" size={16} color={theme.danger} />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={[styles.backLabel, { color: theme.muted, fontSize: 9 }]}>EMERGENCY CONTACT</Text>
-                <Text style={styles.emergencyValue} numberOfLines={1}>
+                <Text style={[styles.backLabel, { color: theme.mode === "light" ? "rgba(0,0,0,0.6)" : theme.muted, fontSize: 9 }]}>EMERGENCY CONTACT</Text>
+                <Text style={[styles.emergencyValue, { color: theme.text }]} numberOfLines={1}>
                   {profile?.emergencyContactName ? `${profile.emergencyContactName} (${profile.emergencyContactPhone ?? "No Phone"})` : "Not Configured"}
                 </Text>
               </View>
             </View>
 
-            <Text style={[styles.flipPrompt, { color: theme.muted }]}>TAP TO SHOW QR PASS</Text>
+            <Text style={[styles.flipPrompt, { color: theme.mode === "light" ? "rgba(255,255,255,0.6)" : theme.muted }]}>TAP TO SHOW QR PASS</Text>
           </LinearGradient>
         </Animated.View>
       </Pressable>

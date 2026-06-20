@@ -472,7 +472,7 @@ public class MembersController : ControllerBase
         }
 
         var profile = await GetOrCreateProfile(member.Id);
-        return Ok(profile);
+        return Ok(MapProfileDto(profile));
     }
 
     [HttpPut("{id:long}/assessment")]
@@ -527,8 +527,55 @@ public class MembersController : ControllerBase
         });
 
         await _context.SaveChangesAsync();
-        return Ok(profile);
+        return Ok(MapProfileDto(profile));
     }
+
+    private static object MapProfileDto(MemberProfile profile) => new
+    {
+        profile.Id,
+        profile.MemberId,
+        profile.HeightCm,
+        profile.WeightKg,
+        profile.FitnessGoal,
+        profile.TargetWeightKg,
+        profile.BodyFatPercentage,
+        profile.WaistCm,
+        profile.ChestCm,
+        profile.ShoulderCm,
+        profile.HipCm,
+        profile.NeckCm,
+        profile.ArmCm,
+        profile.ThighCm,
+        profile.ActivityLevel,
+        profile.TrainingExperience,
+        profile.FavoriteWorkoutType,
+        profile.PreferredTrainingDays,
+        profile.PreferredWorkoutTime,
+        profile.BloodType,
+        profile.MedicalConditions,
+        profile.Allergies,
+        profile.Injuries,
+        profile.Medications,
+        profile.DoctorClearanceRequired,
+        profile.HealthNotes,
+        profile.EmergencyContactName,
+        profile.EmergencyContactRelationship,
+        profile.EmergencyContactPhone,
+        profile.EmergencyContactAltPhone,
+        profile.DailyCaloriesTarget,
+        profile.ProteinTargetGrams,
+        profile.CarbsTargetGrams,
+        profile.FatTargetGrams,
+        profile.WaterTargetMl,
+        profile.Language,
+        profile.Theme,
+        profile.MeasurementUnit,
+        profile.NotificationsEnabled,
+        profile.ProfilePhotoUrl,
+        profile.ProfileCompletionPercentage,
+        profile.CreatedAt,
+        profile.UpdatedAt
+    };
 
     private IQueryable<Member> ApplyScope(IQueryable<Member> query)
     {

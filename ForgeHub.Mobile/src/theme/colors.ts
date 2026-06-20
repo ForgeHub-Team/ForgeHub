@@ -25,9 +25,9 @@ export const lightColors = {
   surface: "#FFFFFF",
   surface2: "#F1F3F5",         // Subtle light grey container
   text: "#1E293B",             // Soft slate dark text, avoiding stark black
-  muted: "#64748B",            // Slate secondary text
+  muted: "#475569",            // Highly readable slate secondary text
   border: "#E2E8F0",           // Soft border
-  warm: "#475569",
+  warm: "#334155",             // High-contrast slate text
   dark: "#FFFFFF",
   black: "#1E293B"
 } as const;

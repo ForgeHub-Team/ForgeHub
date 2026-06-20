@@ -109,8 +109,13 @@ async function request<T>(method: string, path: string, data?: unknown, params?:
       body: data === undefined ? undefined : isFormData ? data : JSON.stringify(data),
       signal
     });
-  } catch {
-    throw new Error("Unable to load data. Please verify that the backend API is running and VITE_API_BASE_URL is correct.");
+  } catch (error) {
+    console.error("Network/Fetch error details:", error);
+    throw new Error(
+      error instanceof Error 
+        ? `Unable to load data. Please verify that the backend API is running and VITE_API_BASE_URL is correct. (Detail: ${error.message})`
+        : "Unable to load data. Please verify that the backend API is running and VITE_API_BASE_URL is correct."
+    );
   }
   if (response.status === 401 && !retried) {
     const refreshedToken = await refreshAccessToken();

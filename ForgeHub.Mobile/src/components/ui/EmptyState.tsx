@@ -1,17 +1,18 @@
 import { StyleSheet, Text, View } from "react-native";
-import { colors } from "@/theme/colors";
+import { useForgeTheme } from "@/theme/theme";
 
 export function EmptyState({ title, message }: { title: string; message?: string }) {
+  const theme = useForgeTheme();
   return (
     <View style={styles.box}>
-      <Text style={styles.title}>{title}</Text>
-      {message ? <Text style={styles.message}>{message}</Text> : null}
+      <Text style={[styles.title, { color: theme.text }]}>{title}</Text>
+      {message ? <Text style={[styles.message, { color: theme.muted }]}>{message}</Text> : null}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   box: { padding: 28, alignItems: "center", gap: 8 },
-  title: { color: colors.text, fontSize: 17, fontWeight: "800", textAlign: "center", letterSpacing: 0 },
-  message: { color: colors.muted, fontSize: 14, textAlign: "center", lineHeight: 20 }
+  title: { fontSize: 17, fontWeight: "800", textAlign: "center", letterSpacing: 0 },
+  message: { fontSize: 14, textAlign: "center", lineHeight: 20 }
 });

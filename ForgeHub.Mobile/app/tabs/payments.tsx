@@ -6,7 +6,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { ForgeCard } from "@/components/ui/ForgeCard";
 import { LoadingState } from "@/components/ui/LoadingState";
-import { colors } from "@/theme/colors";
+import { useForgeTheme } from "@/theme/theme";
 
 function formatAmount(value: unknown) {
   if (typeof value === "string" && value.trim()) return value;
@@ -23,6 +23,7 @@ function formatDate(value?: string | null) {
 
 export default function PaymentsTab() {
   const query = useQuery({ queryKey: ["payments"], queryFn: getPayments });
+  const theme = useForgeTheme();
 
   return (
     <ForgeScreen title="Payments" subtitle="Your billing history" scroll={false}>
@@ -35,10 +36,10 @@ export default function PaymentsTab() {
           keyExtractor={(payment) => String(payment.id)}
           renderItem={({ item: payment }) => (
             <ForgeCard style={styles.card}>
-              <Text style={styles.amount}>{formatAmount(payment.amountValue ?? payment.amount)}</Text>
-              <Text style={styles.meta}>{payment.method ?? "Payment"} - {payment.status ?? "Paid"}</Text>
-              <Text style={styles.meta}>{formatDate(payment.paidAt ?? payment.at)}</Text>
-              {payment.notes ? <Text style={styles.notes}>{payment.notes}</Text> : null}
+              <Text style={[styles.amount, { color: theme.text }]}>{formatAmount(payment.amountValue ?? payment.amount)}</Text>
+              <Text style={[styles.meta, { color: theme.muted }]}>{payment.method ?? "Payment"} - {payment.status ?? "Paid"}</Text>
+              <Text style={[styles.meta, { color: theme.muted }]}>{formatDate(payment.paidAt ?? payment.at)}</Text>
+              {payment.notes ? <Text style={[styles.notes, { color: theme.warm }]}>{payment.notes}</Text> : null}
             </ForgeCard>
           )}
           ListEmptyComponent={
@@ -58,8 +59,8 @@ export default function PaymentsTab() {
 
 const styles = StyleSheet.create({
   card: { gap: 6 },
-  amount: { color: colors.text, fontSize: 24, fontWeight: "900", letterSpacing: 0 },
-  meta: { color: colors.muted, fontWeight: "800" },
-  notes: { color: colors.warm, fontWeight: "700", lineHeight: 20 },
+  amount: { fontSize: 24, fontWeight: "900", letterSpacing: 0 },
+  meta: { fontWeight: "800" },
+  notes: { fontWeight: "700", lineHeight: 20 },
   listContent: { padding: 20, gap: 16, paddingBottom: 120 }
 });

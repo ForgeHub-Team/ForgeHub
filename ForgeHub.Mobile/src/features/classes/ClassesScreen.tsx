@@ -7,7 +7,7 @@ import { ErrorState } from "@/components/ui/ErrorState";
 import { ForgeButton } from "@/components/ui/ForgeButton";
 import { ForgeCard } from "@/components/ui/ForgeCard";
 import { LoadingState } from "@/components/ui/LoadingState";
-import { colors } from "@/theme/colors";
+import { useForgeTheme } from "@/theme/theme";
 import { formatDateTime } from "@/utils/formatDate";
 import { parseApiError } from "@/utils/errors";
 
@@ -15,6 +15,7 @@ export function ClassesScreen({ bookingsOnly = false }: { bookingsOnly?: boolean
   const queryClient = useQueryClient();
   const classesQuery = useQuery({ queryKey: ["classes"], queryFn: getClasses, enabled: !bookingsOnly });
   const bookingsQuery = useQuery({ queryKey: ["bookings"], queryFn: getBookings });
+  const theme = useForgeTheme();
   const action = useMutation({
     mutationFn: ({ classId, bookingId, booked }: { classId: number; bookingId?: number | null | undefined; booked: boolean }) => {
       if (!booked) return bookClass(classId);
@@ -47,7 +48,7 @@ export function ClassesScreen({ bookingsOnly = false }: { bookingsOnly?: boolean
     >
       {loading ? <LoadingState /> : null}
       {error ? <ErrorState error={error} onRetry={refetch} /> : null}
-      {action.error ? <Text style={styles.error}>{parseApiError(action.error).message}</Text> : null}
+      {action.error ? <Text style={[styles.error, { color: theme.danger }]}>{parseApiError(action.error).message}</Text> : null}
 
       {!loading && !error && (
         <FlatList
@@ -61,10 +62,10 @@ export function ClassesScreen({ bookingsOnly = false }: { bookingsOnly?: boolean
             <ForgeCard style={styles.card}>
               <View style={styles.row}>
                 <View style={styles.textBlock}>
-                  <Text style={styles.title}>{item.title}</Text>
-                  <Text style={styles.meta}>{item.coach || "Coach TBA"} - {formatDateTime(item.startAt)}</Text>
-                  {item.branchName ? <Text style={styles.meta}>{item.branchName}</Text> : null}
-                  <Text style={styles.meta}>{item.availableSpots ?? "N/A"} spots available</Text>
+                  <Text style={[styles.title, { color: theme.text }]}>{item.title}</Text>
+                  <Text style={[styles.meta, { color: theme.muted }]}>{item.coach || "Coach TBA"} - {formatDateTime(item.startAt)}</Text>
+                  {item.branchName ? <Text style={[styles.meta, { color: theme.muted }]}>{item.branchName}</Text> : null}
+                  <Text style={[styles.meta, { color: theme.muted }]}>{item.availableSpots ?? "N/A"} spots available</Text>
                 </View>
                 <ForgeButton
                   title={item.booked ? "Cancel" : "Book"}
@@ -101,9 +102,9 @@ const styles = StyleSheet.create({
   card: { gap: 10 },
   row: { flexDirection: "row", alignItems: "center", gap: 12 },
   textBlock: { flex: 1, gap: 4 },
-  title: { color: colors.text, fontSize: 18, fontWeight: "900", letterSpacing: 0 },
-  meta: { color: colors.muted, fontWeight: "700", lineHeight: 19 },
+  title: { fontSize: 18, fontWeight: "900", letterSpacing: 0 },
+  meta: { fontWeight: "700", lineHeight: 19 },
   button: { minWidth: 96 },
-  error: { color: colors.danger, fontWeight: "800" },
+  error: { fontWeight: "800" },
   listContent: { padding: 20, gap: 16, paddingBottom: 120 }
 });

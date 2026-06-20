@@ -43,11 +43,14 @@ const preferencesFields: Array<keyof ProfileFormValues> = [
 const healthFields: Array<keyof ProfileFormValues> = [
   "medicalConditions",
   "allergies",
+  "medicalActionPlans",
   "injuries",
   "medications",
   "emergencyContactName",
   "emergencyContactRelationship",
-  "emergencyContactPhone"
+  "emergencyContactPhone",
+  "firstAidCprStatus",
+  "firstAidCprExpiration"
 ];
 
 function getFieldLabel(name: string): string {
@@ -73,7 +76,10 @@ function getFieldLabel(name: string): string {
     preferredWorkoutTime: "Preferred Workout Time",
     medicalConditions: "Medical Conditions",
     allergies: "Allergies",
+    medicalActionPlans: "Medical Action Plans",
     injuries: "Injuries",
+    firstAidCprStatus: "First Aid / CPR Certification Status",
+    firstAidCprExpiration: "First Aid / CPR Expiration Date (YYYY-MM-DD)",
     medications: "Medications",
     healthNotes: "Health Notes",
     emergencyContactName: "Emergency Contact Name",
@@ -117,7 +123,10 @@ function getFieldPlaceholder(name: string): string {
     profilePhotoUrl: "e.g. https://example.com/photo.jpg",
     medicalConditions: "e.g. None, Hypertension",
     allergies: "e.g. None, Peanuts",
+    medicalActionPlans: "e.g. Asthma action plan, EpiPen instructions",
     injuries: "e.g. None, Knee sprain",
+    firstAidCprStatus: "e.g. Certified, Expired, Not Certified",
+    firstAidCprExpiration: "e.g. 2027-12-31",
     medications: "e.g. None",
     healthNotes: "e.g. General health notes",
     emergencyContactName: "e.g. John Doe",
@@ -140,7 +149,7 @@ const dropdownOptions: Record<string, string[]> = {
 };
 
 const numericFields: Array<keyof ProfileFormValues> = ["heightCm", "weightKg", "targetWeightKg", "dailyCaloriesTarget", "proteinTargetGrams", "carbsTargetGrams", "fatTargetGrams", "waterTargetMl"];
-const textFields: Array<keyof ProfileFormValues> = ["dob", "gender", "fitnessGoal", "activityLevel", "trainingExperience", "favoriteWorkoutType", "preferredTrainingDays", "preferredWorkoutTime", "medicalConditions", "allergies", "injuries", "medications", "emergencyContactName", "emergencyContactRelationship", "emergencyContactPhone"];
+const textFields: Array<keyof ProfileFormValues> = ["dob", "gender", "fitnessGoal", "activityLevel", "trainingExperience", "favoriteWorkoutType", "preferredTrainingDays", "preferredWorkoutTime", "medicalConditions", "allergies", "medicalActionPlans", "injuries", "medications", "emergencyContactName", "emergencyContactRelationship", "emergencyContactPhone", "firstAidCprStatus", "firstAidCprExpiration"];
 
 export function EditProfileScreen() {
   const queryClient = useQueryClient();
@@ -359,7 +368,7 @@ export function EditProfileScreen() {
                       value={(field.value as string | undefined) ?? ""}
                       onChangeText={field.onChange}
                       error={fieldState.error?.message}
-                      multiline={["medicalConditions", "allergies", "injuries", "medications", "healthNotes"].includes(String(name))}
+                      multiline={["medicalConditions", "allergies", "injuries", "medications", "healthNotes", "medicalActionPlans"].includes(String(name))}
                     />
                   )}
                 />

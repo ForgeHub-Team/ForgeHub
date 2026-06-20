@@ -1,22 +1,28 @@
 import { StyleSheet, Text } from "react-native";
 import { ForgeCard } from "@/components/ui/ForgeCard";
-import { colors } from "@/theme/colors";
+import { useForgeTheme } from "@/theme/theme";
 import { MemberProfile } from "@/types/profile";
 
 export function HealthInfoCard({ profile }: { profile: MemberProfile }) {
+  const theme = useForgeTheme();
   return (
     <ForgeCard style={styles.card}>
-      <Text style={styles.title}>Health info</Text>
-      <Text style={styles.text}>Kept inside profile and not shown on the home dashboard.</Text>
-      <Text style={styles.value}>Blood type: {profile.bloodType || "Not set"}</Text>
-      <Text style={styles.text}>Doctor clearance: {profile.doctorClearanceRequired ? "Required" : "Not required"}</Text>
+      <Text style={[styles.title, { color: theme.text }]}>Health info</Text>
+      <Text style={[styles.text, { color: theme.muted }]}>Kept inside profile and not shown on the home dashboard.</Text>
+      <Text style={[styles.value, { color: theme.text }]}>Blood type: {profile.bloodType || "Not set"}</Text>
+      <Text style={[styles.text, { color: theme.muted }]}>Doctor clearance: {profile.doctorClearanceRequired ? "Required" : "Not required"}</Text>
+      <Text style={[styles.value, { color: theme.text }]}>Medical conditions: {profile.medicalConditions || "None"}</Text>
+      <Text style={[styles.value, { color: theme.text }]}>Allergies: {profile.allergies || "None"}</Text>
+      <Text style={[styles.value, { color: theme.text }]}>Action plans: {profile.medicalActionPlans || "None"}</Text>
+      <Text style={[styles.value, { color: theme.text }]}>First Aid/CPR: {profile.firstAidCprStatus || "Not set"}</Text>
+      <Text style={[styles.text, { color: theme.muted }]}>Certification Expiration: {profile.firstAidCprExpiration || "N/A"}</Text>
     </ForgeCard>
   );
 }
 
 const styles = StyleSheet.create({
   card: { gap: 8 },
-  title: { color: colors.text, fontSize: 18, fontWeight: "900", letterSpacing: 0 },
-  text: { color: colors.muted, lineHeight: 20, fontWeight: "600" },
-  value: { color: colors.text, fontWeight: "900" }
+  title: { fontSize: 18, fontWeight: "900", letterSpacing: 0 },
+  text: { lineHeight: 20, fontWeight: "600" },
+  value: { fontWeight: "900" }
 });
