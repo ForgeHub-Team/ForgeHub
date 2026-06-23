@@ -43,61 +43,125 @@ public class OwnerDashboardController : ControllerBase
             .AsNoTracking()
             .ToListAsync();
         var branchIds = branches.Select(branch => branch.Id).ToHashSet();
+        var branchNameById = branches.ToDictionary(branch => branch.Id, branch => branch.Name);
 
-        var members = await _context.Members
+        // Fetch members with projection of only required fields + latest membership details
+        var membersWithLatest = await _context.Members
             .Where(member => member.GymId == gymId.Value)
+            .Select(member => new
+            {
+                member.Id,
+                member.FullName,
+                member.Phone,
+                member.HomeBranchId,
+                member.JoinDate,
+                member.IsActive,
+                LatestMembership = _context.MemberMemberships
+                    .Where(membership => membership.MemberId == member.Id)
+                    .OrderByDescending(membership => membership.StartDate)
+                    .ThenByDescending(membership => membership.Id)
+                    .Select(membership => new { membership.Status, membership.EndDate, membership.PlanId, PlanName = membership.Plan != null ? membership.Plan.Name : "Unassigned" })
+                    .FirstOrDefault()
+            })
             .AsNoTracking()
             .ToListAsync();
-        var memberIds = members.Select(member => member.Id).ToHashSet();
-
-        var memberships = await _context.MemberMemberships
-            .Include(membership => membership.Plan)
-            .Where(membership => membership.MemberId.HasValue && memberIds.Contains(membership.MemberId.Value))
-            .OrderByDescending(membership => membership.StartDate)
-            .ThenByDescending(membership => membership.Id)
-            .AsNoTracking()
-            .ToListAsync();
-        var latestMembershipByMember = memberships
-            .GroupBy(membership => membership.MemberId!.Value)
-            .ToDictionary(group => group.Key, group => group.First());
 
         var plans = await _context.MembershipPlans
             .Where(plan => plan.GymId == gymId.Value)
             .AsNoTracking()
             .ToListAsync();
 
-        var payments = await _context.Payments
+        // Query only payments from the last 30 days or start of the month, whichever is earlier
+        var queryStart = monthStart < last7Start ? monthStart : last7Start;
+        var recentPayments = await _context.Payments
             .Include(payment => payment.Member)
             .Include(payment => payment.Branch)
             .Include(payment => payment.Membership)
                 .ThenInclude(membership => membership!.Plan)
             .Include(payment => payment.ReceivedByUser)
-            .Where(payment => payment.GymId == gymId.Value)
+            .Where(payment => payment.GymId == gymId.Value && payment.PaidAt >= queryStart && payment.PaidAt < tomorrowStart)
             .AsNoTracking()
             .ToListAsync();
 
-        var checkIns = await _context.CheckIns
-            .Where(checkIn => checkIn.BranchId.HasValue && branchIds.Contains(checkIn.BranchId.Value))
-            .AsNoTracking()
+        // Calculate rolling KPIs from recent payments
+        var revenueToday = recentPayments.Where(payment => payment.PaidAt >= todayStart && payment.PaidAt < tomorrowStart).Sum(payment => payment.Amount ?? 0m);
+        var revenueLast7Days = recentPayments.Where(payment => payment.PaidAt >= last7Start && payment.PaidAt < tomorrowStart).Sum(payment => payment.Amount ?? 0m);
+        var revenueThisMonth = recentPayments.Where(payment => payment.PaidAt >= monthStart && payment.PaidAt < tomorrowStart).Sum(payment => payment.Amount ?? 0m);
+
+        // All-time payment aggregates calculated directly in the database
+        var paymentsByBranch = await _context.Payments
+            .Where(p => p.GymId == gymId.Value && p.BranchId.HasValue)
+            .GroupBy(p => p.BranchId!.Value)
+            .Select(g => new { BranchId = g.Key, TotalRevenue = g.Sum(p => p.Amount ?? 0m) })
+            .ToDictionaryAsync(x => x.BranchId, x => x.TotalRevenue);
+
+        var planPaymentsSummary = await _context.Payments
+            .Where(p => p.GymId == gymId.Value && p.Membership != null && p.Membership.PlanId.HasValue)
+            .GroupBy(p => p.Membership!.PlanId!.Value)
+            .Select(g => new { PlanId = g.Key, Count = g.Count(), TotalRevenue = g.Sum(p => p.Amount ?? 0m) })
+            .ToDictionaryAsync(x => x.PlanId, x => x);
+
+        var revenueByPaymentMethod = await _context.Payments
+            .Where(p => p.GymId == gymId.Value)
+            .GroupBy(p => string.IsNullOrWhiteSpace(p.Method) ? "Unknown" : p.Method)
+            .Select(g => new OwnerRevenueBucketDto
+            {
+                Name = g.Key,
+                Revenue = g.Sum(p => p.Amount ?? 0m),
+                Count = g.Count()
+            })
+            .OrderByDescending(row => row.Revenue)
             .ToListAsync();
 
-        var users = await _context.Users
-            .Include(user => user.Role)
-            .Include(user => user.Branch)
-            .Where(user => user.GymId == gymId.Value)
-            .AsNoTracking()
-            .ToListAsync();
-        var employees = await _context.Employees
-            .Where(employee => employee.GymId == gymId.Value)
-            .AsNoTracking()
+        var revenueByMembershipPlan = await _context.Payments
+            .Where(p => p.GymId == gymId.Value && p.Membership != null && p.Membership.Plan != null)
+            .GroupBy(p => p.Membership!.Plan!.Name)
+            .Select(g => new OwnerRevenueBucketDto
+            {
+                Name = g.Key ?? "Unassigned",
+                Revenue = g.Sum(p => p.Amount ?? 0m),
+                Count = g.Count()
+            })
+            .OrderByDescending(row => row.Revenue)
             .ToListAsync();
 
-        var branchNameById = branches.ToDictionary(branch => branch.Id, branch => branch.Name);
-        var activeMembers = members.Count(member => IsActiveMember(member, latestMembershipByMember.GetValueOrDefault(member.Id), today));
-        var expiredMembers = members.Count(member => IsExpiredMember(member, latestMembershipByMember.GetValueOrDefault(member.Id), today));
-        var newMembersThisMonth = members.Count(member => member.JoinDate.HasValue && member.JoinDate.Value >= DateOnly.FromDateTime(monthStart));
+        var paymentsRecordedByStaff = await _context.Payments
+            .Where(p => p.GymId == gymId.Value && p.ReceivedByUserId.HasValue)
+            .GroupBy(p => p.ReceivedByUserId!.Value)
+            .Select(g => new { StaffId = g.Key, Count = g.Count() })
+            .ToDictionaryAsync(x => x.StaffId, x => x.Count);
 
-        var paymentRecords = payments
+        // Occupancy check-in aggregates calculated directly in the database
+        var activeCheckInsByBranch = await _context.CheckIns
+            .Where(c => c.BranchId.HasValue && branchIds.Contains(c.BranchId.Value) && (!c.CheckOutTime.HasValue || c.CheckOutTime.Value > now))
+            .GroupBy(c => c.BranchId!.Value)
+            .Select(g => new { BranchId = g.Key, Count = g.Count() })
+            .ToDictionaryAsync(x => x.BranchId, x => x.Count);
+
+        var todayCheckInsByBranch = await _context.CheckIns
+            .Where(c => c.BranchId.HasValue && branchIds.Contains(c.BranchId.Value) && c.CheckInTime >= todayStart && c.CheckInTime < tomorrowStart)
+            .GroupBy(c => c.BranchId!.Value)
+            .Select(g => new { BranchId = g.Key, Count = g.Count() })
+            .ToDictionaryAsync(x => x.BranchId, x => x.Count);
+
+        // In-memory member counts on optimized projected list
+        var activeMembers = membersWithLatest.Count(m =>
+            m.IsActive &&
+            m.LatestMembership != null &&
+            m.LatestMembership.Status == "ACTIVE" &&
+            (!m.LatestMembership.EndDate.HasValue || m.LatestMembership.EndDate.Value >= today));
+
+        var expiredMembersList = membersWithLatest
+            .Where(m => !m.IsActive ||
+                        m.LatestMembership == null ||
+                        m.LatestMembership.Status == "EXPIRED" ||
+                        (m.LatestMembership.EndDate.HasValue && m.LatestMembership.EndDate.Value < today))
+            .ToList();
+
+        var expiredMembers = expiredMembersList.Count;
+        var newMembersThisMonth = membersWithLatest.Count(m => m.JoinDate.HasValue && m.JoinDate.Value >= DateOnly.FromDateTime(monthStart));
+
+        var paymentRecords = recentPayments
             .OrderByDescending(payment => payment.PaidAt ?? DateTime.MinValue)
             .Select(payment => new OwnerPaymentRecordDto
             {
@@ -117,7 +181,7 @@ public class OwnerDashboardController : ControllerBase
             .Select(day =>
             {
                 var nextDay = day.AddDays(1);
-                var dayPayments = payments.Where(payment => payment.PaidAt >= day && payment.PaidAt < nextDay).ToList();
+                var dayPayments = recentPayments.Where(payment => payment.PaidAt >= day && payment.PaidAt < nextDay).ToList();
                 return new OwnerRevenueTrendDto
                 {
                     Date = day.ToString("yyyy-MM-dd"),
@@ -129,18 +193,31 @@ public class OwnerDashboardController : ControllerBase
 
         var branchPerformance = branches.Select(branch =>
         {
-            var branchMembers = members.Where(member => member.HomeBranchId == branch.Id).ToList();
-            var currentCheckIns = checkIns.Count(checkIn => checkIn.BranchId == branch.Id && (!checkIn.CheckOutTime.HasValue || checkIn.CheckOutTime.Value > now));
+            var branchMembers = membersWithLatest.Where(member => member.HomeBranchId == branch.Id).ToList();
+            var currentCheckIns = activeCheckInsByBranch.GetValueOrDefault(branch.Id);
             var capacity = branch.Capacity ?? 0;
             var capacityPercent = capacity > 0 ? Math.Round(currentCheckIns * 100m / capacity, 1) : 0m;
+            
+            var branchActive = branchMembers.Count(m =>
+                m.IsActive &&
+                m.LatestMembership != null &&
+                m.LatestMembership.Status == "ACTIVE" &&
+                (!m.LatestMembership.EndDate.HasValue || m.LatestMembership.EndDate.Value >= today));
+            
+            var branchExpired = branchMembers.Count(m =>
+                !m.IsActive ||
+                m.LatestMembership == null ||
+                m.LatestMembership.Status == "EXPIRED" ||
+                (m.LatestMembership.EndDate.HasValue && m.LatestMembership.EndDate.Value < today));
+
             return new OwnerBranchPerformanceDto
             {
                 BranchId = branch.Id,
                 Branch = branch.Name,
-                Revenue = payments.Where(payment => payment.BranchId == branch.Id).Sum(payment => payment.Amount ?? 0m),
-                ActiveMembers = branchMembers.Count(member => IsActiveMember(member, latestMembershipByMember.GetValueOrDefault(member.Id), today)),
-                ExpiredMembers = branchMembers.Count(member => IsExpiredMember(member, latestMembershipByMember.GetValueOrDefault(member.Id), today)),
-                CheckInsToday = checkIns.Count(checkIn => checkIn.BranchId == branch.Id && checkIn.CheckInTime >= todayStart && checkIn.CheckInTime < tomorrowStart),
+                Revenue = paymentsByBranch.GetValueOrDefault(branch.Id),
+                ActiveMembers = branchActive,
+                ExpiredMembers = branchExpired,
+                CheckInsToday = todayCheckInsByBranch.GetValueOrDefault(branch.Id),
                 Capacity = capacity,
                 CurrentCheckIns = currentCheckIns,
                 CapacityPercent = capacityPercent,
@@ -152,33 +229,30 @@ public class OwnerDashboardController : ControllerBase
         {
             BranchId = row.BranchId,
             Branch = row.Branch,
-            TotalMembers = members.Count(member => member.HomeBranchId == row.BranchId),
+            TotalMembers = membersWithLatest.Count(member => member.HomeBranchId == row.BranchId),
             ActiveMembers = row.ActiveMembers,
             ExpiredMembers = row.ExpiredMembers,
-            NewMembersThisMonth = members.Count(member => member.HomeBranchId == row.BranchId && member.JoinDate.HasValue && member.JoinDate.Value >= DateOnly.FromDateTime(monthStart))
+            NewMembersThisMonth = membersWithLatest.Count(member => member.HomeBranchId == row.BranchId && member.JoinDate.HasValue && member.JoinDate.Value >= DateOnly.FromDateTime(monthStart))
         }).ToList();
 
-        var expiredMemberRecords = members
-            .Where(member => IsExpiredMember(member, latestMembershipByMember.GetValueOrDefault(member.Id), today))
-            .Select(member =>
+        var expiredMemberIds = expiredMembersList.Select(m => m.Id).ToHashSet();
+        var lastCheckInByMember = await _context.CheckIns
+            .Where(c => c.MemberId.HasValue && expiredMemberIds.Contains(c.MemberId.Value))
+            .GroupBy(c => c.MemberId!.Value)
+            .Select(g => new { MemberId = g.Key, LastCheckIn = g.Max(c => c.CheckInTime) })
+            .ToDictionaryAsync(x => x.MemberId, x => x.LastCheckIn);
+
+        var expiredMemberRecords = expiredMembersList
+            .Select(m => new OwnerExpiredMemberDto
             {
-                var membership = latestMembershipByMember.GetValueOrDefault(member.Id);
-                var expiryDate = membership?.EndDate;
-                return new OwnerExpiredMemberDto
-                {
-                    MemberId = member.Id,
-                    MemberName = member.FullName ?? "Member",
-                    Phone = member.Phone ?? string.Empty,
-                    Branch = member.HomeBranchId.HasValue && branchNameById.TryGetValue(member.HomeBranchId.Value, out var branchName) ? branchName : "Unassigned",
-                    MembershipPlan = membership?.Plan?.Name ?? "Unassigned",
-                    ExpiryDate = expiryDate,
-                    DaysExpired = expiryDate.HasValue ? Math.Max(0, today.DayNumber - expiryDate.Value.DayNumber) : 0,
-                    LastCheckIn = checkIns
-                        .Where(checkIn => checkIn.MemberId == member.Id)
-                        .OrderByDescending(checkIn => checkIn.CheckInTime)
-                        .Select(checkIn => checkIn.CheckInTime)
-                        .FirstOrDefault()
-                };
+                MemberId = m.Id,
+                MemberName = m.FullName ?? "Member",
+                Phone = m.Phone ?? string.Empty,
+                Branch = m.HomeBranchId.HasValue && branchNameById.TryGetValue(m.HomeBranchId.Value, out var branchName) ? branchName : "Unassigned",
+                MembershipPlan = m.LatestMembership?.PlanName ?? "Unassigned",
+                ExpiryDate = m.LatestMembership?.EndDate,
+                DaysExpired = m.LatestMembership?.EndDate.HasValue == true ? Math.Max(0, today.DayNumber - m.LatestMembership.EndDate.Value.DayNumber) : 0,
+                LastCheckIn = lastCheckInByMember.GetValueOrDefault(m.Id)
             })
             .OrderByDescending(member => member.DaysExpired)
             .ToList();
@@ -191,31 +265,51 @@ public class OwnerDashboardController : ControllerBase
 
         var planPerformance = plans.Select(plan =>
         {
-            var planMembershipIds = memberships.Where(membership => membership.PlanId == plan.Id).Select(membership => membership.Id).ToHashSet();
-            var planPayments = payments.Where(payment => payment.MembershipId.HasValue && planMembershipIds.Contains(payment.MembershipId.Value)).ToList();
+            var planSummary = planPaymentsSummary.GetValueOrDefault(plan.Id);
+            var activeCount = membersWithLatest.Count(m =>
+                m.IsActive &&
+                m.LatestMembership != null &&
+                m.LatestMembership.PlanId == plan.Id &&
+                m.LatestMembership.Status == "ACTIVE" &&
+                (!m.LatestMembership.EndDate.HasValue || m.LatestMembership.EndDate.Value >= today));
+
             return new OwnerPlanPerformanceDto
             {
                 PlanId = plan.Id,
                 PlanName = plan.Name ?? "Membership Plan",
                 Price = plan.Price ?? 0m,
-                SalesCount = planPayments.Count,
-                TotalRevenue = planPayments.Sum(payment => payment.Amount ?? 0m),
-                ActiveMembersUsingPlan = memberships.Count(membership => membership.PlanId == plan.Id && IsActiveMembership(membership, today))
+                SalesCount = planSummary?.Count ?? 0,
+                TotalRevenue = planSummary?.TotalRevenue ?? 0m,
+                ActiveMembersUsingPlan = activeCount
             };
         }).ToList();
 
-        var employeeRows = BuildEmployees(users, employees, branchNameById, payments);
-        var expiringSoon = members.Count(member =>
-        {
-            var membership = latestMembershipByMember.GetValueOrDefault(member.Id);
-            return IsActiveMembership(membership, today) && membership?.EndDate >= today && membership.EndDate <= next7;
-        });
+        var users = await _context.Users
+            .Include(user => user.Role)
+            .Include(user => user.Branch)
+            .Where(user => user.GymId == gymId.Value)
+            .AsNoTracking()
+            .ToListAsync();
+        var employees = await _context.Employees
+            .Where(employee => employee.GymId == gymId.Value)
+            .AsNoTracking()
+            .ToListAsync();
+
+        var employeeRows = BuildEmployees(users, employees, branchNameById, paymentsRecordedByStaff);
+        
+        var expiringSoon = membersWithLatest.Count(m =>
+            m.IsActive &&
+            m.LatestMembership != null &&
+            m.LatestMembership.Status == "ACTIVE" &&
+            m.LatestMembership.EndDate.HasValue &&
+            m.LatestMembership.EndDate.Value >= today &&
+            m.LatestMembership.EndDate.Value <= next7);
 
         return Ok(new OwnerDashboardDto
         {
-            RevenueToday = payments.Where(payment => payment.PaidAt >= todayStart && payment.PaidAt < tomorrowStart).Sum(payment => payment.Amount ?? 0m),
-            RevenueLast7Days = payments.Where(payment => payment.PaidAt >= last7Start && payment.PaidAt < tomorrowStart).Sum(payment => payment.Amount ?? 0m),
-            RevenueThisMonth = payments.Where(payment => payment.PaidAt >= monthStart && payment.PaidAt < tomorrowStart).Sum(payment => payment.Amount ?? 0m),
+            RevenueToday = revenueToday,
+            RevenueLast7Days = revenueLast7Days,
+            RevenueThisMonth = revenueThisMonth,
             ActiveMembers = activeMembers,
             ExpiredMembers = expiredMembers,
             NewMembersThisMonth = newMembersThisMonth,
@@ -236,16 +330,8 @@ public class OwnerDashboardController : ControllerBase
             ExpiredMemberRecords = expiredMemberRecords,
             PaymentsOverview = new OwnerPaymentsOverviewDto
             {
-                RevenueByPaymentMethod = payments
-                    .GroupBy(payment => string.IsNullOrWhiteSpace(payment.Method) ? "Unknown" : payment.Method)
-                    .Select(group => new OwnerRevenueBucketDto { Name = group.Key!, Revenue = group.Sum(payment => payment.Amount ?? 0m), Count = group.Count() })
-                    .OrderByDescending(row => row.Revenue)
-                    .ToList(),
-                RevenueByMembershipPlan = paymentRecords
-                    .GroupBy(payment => payment.MembershipPlan)
-                    .Select(group => new OwnerRevenueBucketDto { Name = group.Key, Revenue = group.Sum(payment => payment.Amount), Count = group.Count() })
-                    .OrderByDescending(row => row.Revenue)
-                    .ToList(),
+                RevenueByPaymentMethod = revenueByPaymentMethod,
+                RevenueByMembershipPlan = revenueByMembershipPlan,
                 PaymentCountOverTime = paymentCountOverTime
             },
             PlanPerformance = planPerformance,
@@ -300,7 +386,7 @@ public class OwnerDashboardController : ControllerBase
         List<Models.User> users,
         List<Models.Employee> employees,
         Dictionary<long, string> branchNameById,
-        List<Models.Payment> payments)
+        Dictionary<long, int> paymentsRecordedByStaff)
     {
         var employeeUserIds = employees.Where(employee => employee.UserId.HasValue).Select(employee => employee.UserId!.Value).ToHashSet();
         var teamUsers = users
@@ -319,7 +405,7 @@ public class OwnerDashboardController : ControllerBase
                 Role = role,
                 Branch = branchId.HasValue && branchNameById.TryGetValue(branchId.Value, out var branchName) ? branchName : "All branches",
                 Status = user.IsActive ? "Active" : "Inactive",
-                PaymentsRecorded = payments.Count(payment => payment.ReceivedByUserId == user.Id),
+                PaymentsRecorded = paymentsRecordedByStaff.GetValueOrDefault(user.Id),
                 CheckInsHandled = 0
             };
         }).OrderBy(employee => employee.Role).ThenBy(employee => employee.EmployeeName).ToList();

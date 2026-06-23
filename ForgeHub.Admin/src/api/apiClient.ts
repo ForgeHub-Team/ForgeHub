@@ -3,6 +3,17 @@ import type { AuthSession, AuthUser } from "../types/auth";
 
 export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:5156/api";
 
+interface CacheEntry {
+  data: any;
+  timestamp: number;
+}
+const getCache = new Map<string, CacheEntry>();
+const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes cache TTL
+
+export function clearClientCache() {
+  getCache.clear();
+}
+
 export class BackendMissingError extends Error {
   constructor(endpoint: string) {
     super(`Backend endpoint is missing or unavailable: ${endpoint}`);
@@ -91,6 +102,20 @@ async function refreshAccessToken() {
 }
 
 async function request<T>(method: string, path: string, data?: unknown, params?: Record<string, unknown>, retried = false, signal?: AbortSignal): Promise<T> {
+  // Evict cache on any mutations
+  if (["POST", "PUT", "PATCH", "DELETE"].includes(method.toUpperCase())) {
+    getCache.clear();
+  }
+
+  // Serve from cache if available and fresh
+  const isCacheable = method.toUpperCase() === "GET" && (path.includes("/dashboard") || path.includes("/workspace") || path.includes("/audit-logs"));
+  if (isCacheable) {
+    const cached = getCache.get(path);
+    if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
+      return cached.data as T;
+    }
+  }
+
   const token = getAccessToken();
   const base = API_BASE_URL.replace(/\/$/, "");
   const url = new URL(`${base}${path}`);
@@ -153,7 +178,11 @@ async function request<T>(method: string, path: string, data?: unknown, params?:
     throw new Error(message);
   }
   if (response.status === 204) return undefined as T;
-  return await response.json() as T;
+  const result = await response.json() as T;
+  if (isCacheable) {
+    getCache.set(path, { data: result, timestamp: Date.now() });
+  }
+  return result;
 }
 
 export async function get<T>(path: string, params?: Record<string, unknown>, signal?: AbortSignal) {

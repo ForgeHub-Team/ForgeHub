@@ -8,7 +8,6 @@ export function EmergencyInfoCard({ profile }: { profile: MemberProfile }) {
   return (
     <ForgeCard style={styles.card}>
       <Text style={[styles.title, { color: theme.text }]}>Emergency contact</Text>
-      <Text style={[styles.text, { color: theme.muted }]}>Emergency and health info helps staff respond safely.</Text>
       <Text style={[styles.value, { color: theme.text }]}>{profile.emergencyContactName || "No emergency contact"}</Text>
       <Text style={[styles.text, { color: theme.muted }]}>{profile.emergencyContactRelationship || "Relationship not set"} · {profile.emergencyContactPhone || "Phone not set"}</Text>
     </ForgeCard>

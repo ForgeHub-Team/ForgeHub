@@ -44,22 +44,46 @@ public class ManagerDashboardController : ControllerBase
             return Forbid();
         }
 
-        var members = await _context.Members
+        // Fetch members with projection of only required fields + latest membership details
+        var membersWithLatest = await _context.Members
             .Where(member => member.HomeBranchId == branchId)
+            .Select(member => new
+            {
+                member.Id,
+                member.FullName,
+                member.Phone,
+                member.HomeBranchId,
+                member.JoinDate,
+                member.IsActive,
+                LatestMembership = _context.MemberMemberships
+                    .Where(membership => membership.MemberId == member.Id)
+                    .OrderByDescending(membership => membership.StartDate)
+                    .ThenByDescending(membership => membership.Id)
+                    .Select(membership => new { membership.Status, membership.EndDate, PlanName = membership.Plan != null ? membership.Plan.Name : "Unassigned" })
+                    .FirstOrDefault()
+            })
             .AsNoTracking()
             .ToListAsync();
-        var memberIds = members.Select(member => member.Id).ToHashSet();
 
-        var memberships = await _context.MemberMemberships
-            .Include(membership => membership.Plan)
-            .Where(membership => membership.MemberId.HasValue && memberIds.Contains(membership.MemberId.Value))
-            .OrderByDescending(membership => membership.StartDate)
-            .ThenByDescending(membership => membership.Id)
-            .AsNoTracking()
-            .ToListAsync();
-        var latestMembershipByMember = memberships
-            .GroupBy(membership => membership.MemberId!.Value)
-            .ToDictionary(group => group.Key, group => group.First());
+        var latestMembershipByMember = membersWithLatest
+            .Where(m => m.LatestMembership != null)
+            .ToDictionary(m => m.Id, m => new Models.MemberMembership
+            {
+                Status = m.LatestMembership!.Status,
+                EndDate = m.LatestMembership.EndDate,
+                Plan = new Models.MembershipPlan { Name = m.LatestMembership.PlanName }
+            });
+
+        // Map projected objects to Member instances for compatibility with downstream logic
+        var members = membersWithLatest.Select(m => new Models.Member
+        {
+            Id = m.Id,
+            FullName = m.FullName,
+            Phone = m.Phone,
+            HomeBranchId = m.HomeBranchId,
+            JoinDate = m.JoinDate,
+            IsActive = m.IsActive
+        }).ToList();
 
         var checkIns = await _context.CheckIns
             .Include(checkIn => checkIn.Member)

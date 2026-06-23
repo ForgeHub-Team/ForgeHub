@@ -44,6 +44,4 @@ export interface MemberProfile {
   trainerName?: string | null;
   qrCode?: string | null;
   medicalActionPlans?: string | null;
-  firstAidCprStatus?: string | null;
-  firstAidCprExpiration?: string | null;
 }

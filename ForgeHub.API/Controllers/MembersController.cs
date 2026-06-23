@@ -57,7 +57,76 @@ public class MembersController : ControllerBase
                 (isNumericSearch && member.Id == searchId));
         }
 
-        var members = await membersQuery.OrderBy(m => m.FullName).ToListAsync();
+        // Apply membership status filter at DB level if present
+        if (!string.IsNullOrWhiteSpace(status))
+        {
+            var normalizedStatus = AppStatuses.Normalize(status);
+            if (normalizedStatus == "INACTIVE")
+            {
+                membersQuery = membersQuery.Where(m => !m.IsActive);
+            }
+            else
+            {
+                membersQuery = membersQuery.Where(m => m.IsActive && 
+                    (
+                        (normalizedStatus == "ACTIVE" && (!_context.MemberMemberships.Any(ms => ms.MemberId == m.Id) || _context.MemberMemberships.Where(ms => ms.MemberId == m.Id).OrderByDescending(ms => ms.StartDate).ThenByDescending(ms => ms.Id).Select(ms => ms.Status).FirstOrDefault() == "ACTIVE"))
+                        ||
+                        (_context.MemberMemberships.Where(ms => ms.MemberId == m.Id).OrderByDescending(ms => ms.StartDate).ThenByDescending(ms => ms.Id).Select(ms => ms.Status).FirstOrDefault() == normalizedStatus)
+                    )
+                );
+            }
+        }
+
+        var todayStart = DateTime.UtcNow.Date;
+        var todayEnd = todayStart.AddDays(1);
+        var now = DateTime.UtcNow;
+
+        // Apply attendance filter at DB level if present
+        if (!string.IsNullOrWhiteSpace(attendance))
+        {
+            var normalizedAttendance = AppStatuses.Normalize(attendance);
+            if (normalizedAttendance == "CURRENT" || normalizedAttendance == "CURRENTLY_CHECKED_IN")
+            {
+                membersQuery = membersQuery.Where(m => _context.CheckIns.Any(c => c.MemberId == m.Id && (!c.CheckOutTime.HasValue || c.CheckOutTime.Value > now)));
+            }
+            else if (normalizedAttendance == "TODAY" || normalizedAttendance == "CHECKED_IN_TODAY")
+            {
+                membersQuery = membersQuery.Where(m => _context.CheckIns.Any(c => c.MemberId == m.Id && c.CheckInTime >= todayStart && c.CheckInTime < todayEnd));
+            }
+            else if (normalizedAttendance == "NOT_TODAY" || normalizedAttendance == "NOT_CHECKED_IN_TODAY")
+            {
+                membersQuery = membersQuery.Where(m => !_context.CheckIns.Any(c => c.MemberId == m.Id && c.CheckInTime >= todayStart && c.CheckInTime < todayEnd));
+            }
+        }
+
+        List<Models.Member> members;
+        int totalCount = 0;
+        int safePage = 1;
+        int safePageSize = 15;
+        int totalPages = 1;
+        bool isPaged = page.HasValue || pageSize.HasValue;
+
+        if (isPaged)
+        {
+            safePageSize = Math.Clamp(pageSize ?? 15, 1, 100);
+            safePage = Math.Max(page ?? 1, 1);
+            totalCount = await membersQuery.CountAsync();
+            totalPages = Math.Max(1, (int)Math.Ceiling(totalCount / (double)safePageSize));
+            
+            members = await membersQuery
+                .OrderBy(m => m.FullName)
+                .Skip((safePage - 1) * safePageSize)
+                .Take(safePageSize)
+                .ToListAsync();
+        }
+        else
+        {
+            members = await membersQuery
+                .OrderBy(m => m.FullName)
+                .ToListAsync();
+            totalCount = members.Count;
+        }
+
         var memberIds = members.Select(member => member.Id).ToList();
         var branchIds = members.Where(member => member.HomeBranchId.HasValue).Select(member => member.HomeBranchId!.Value).Distinct().ToList();
 
@@ -70,7 +139,8 @@ public class MembersController : ControllerBase
             .OrderByDescending(membership => membership.StartDate)
             .ToListAsync();
 
-        var plans = await _context.MembershipPlans.ToDictionaryAsync(plan => plan.Id, plan => plan.Name ?? string.Empty);
+        var plans = await _context.MembershipPlans
+            .ToDictionaryAsync(plan => plan.Id, plan => plan.Name ?? string.Empty);
 
         var latestPaymentMemberIds = await _context.Payments
             .Where(payment => payment.MemberId.HasValue && memberIds.Contains(payment.MemberId.Value))
@@ -82,9 +152,6 @@ public class MembersController : ControllerBase
             .GroupBy(membership => membership.MemberId!.Value)
             .ToDictionary(group => group.Key, group => group.First());
 
-        var todayStart = DateTime.UtcNow.Date;
-        var todayEnd = todayStart.AddDays(1);
-        var now = DateTime.UtcNow;
         var todayCheckedInMemberIds = await _context.CheckIns
             .Where(checkIn => checkIn.MemberId.HasValue &&
                 memberIds.Contains(checkIn.MemberId.Value) &&
@@ -93,6 +160,7 @@ public class MembersController : ControllerBase
             .Select(checkIn => checkIn.MemberId!.Value)
             .Distinct()
             .ToListAsync();
+
         var activeCheckedInMemberIds = await _context.CheckIns
             .Where(checkIn => checkIn.MemberId.HasValue &&
                 memberIds.Contains(checkIn.MemberId.Value) &&
@@ -100,27 +168,33 @@ public class MembersController : ControllerBase
             .Select(checkIn => checkIn.MemberId!.Value)
             .Distinct()
             .ToListAsync();
+
         var todaySet = todayCheckedInMemberIds.ToHashSet();
         var activeSet = activeCheckedInMemberIds.ToHashSet();
 
-        var result = members.Select(member =>
+        var items = members.Select(member =>
         {
             membershipByMember.TryGetValue(member.Id, out var membership);
             var branchName = member.HomeBranchId.HasValue && branches.TryGetValue(member.HomeBranchId.Value, out var name)
                 ? name ?? string.Empty
                 : string.Empty;
 
-            return new AdminMemberDto
+            return new
             {
-                Id = member.Id,
-                GymId = member.GymId,
+                member.Id,
+                member.GymId,
                 BranchId = member.HomeBranchId,
+                HomeBranchId = member.HomeBranchId,
+                BranchName = branchName,
                 Name = member.FullName ?? string.Empty,
-                Email = member.Email ?? string.Empty,
-                Phone = member.Phone ?? string.Empty,
+                FullName = member.FullName ?? string.Empty,
+                member.Email,
+                member.Phone,
                 PlanId = membership?.PlanId is long planId && plans.TryGetValue(planId, out var planName) && !string.IsNullOrWhiteSpace(planName)
                     ? planName
                     : "Unassigned",
+                TrainerId = (long?)null,
+                TrainerName = "Unassigned",
                 Status = member.IsActive
                     ? membership?.Status ?? AppStatuses.MembershipActive
                     : "INACTIVE",
@@ -133,61 +207,12 @@ public class MembersController : ControllerBase
                 JoinedAt = member.JoinDate?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) ?? string.Empty,
                 MembershipStartDate = membership?.StartDate?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) ?? string.Empty,
                 MembershipEndDate = membership?.EndDate?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) ?? string.Empty,
-                IsActive = member.IsActive
+                member.IsActive
             };
-        }).Select(member => new
-        {
-            member.Id,
-            member.GymId,
-            member.BranchId,
-            HomeBranchId = member.BranchId,
-            BranchName = member.BranchId.HasValue && branches.TryGetValue(member.BranchId.Value, out var branchName) ? branchName : string.Empty,
-            member.Name,
-            FullName = member.Name,
-            member.Email,
-            member.Phone,
-            member.PlanId,
-            member.TrainerId,
-            member.TrainerName,
-            member.Status,
-            member.PaymentStatus,
-            member.AttendanceToday,
-            member.JoinedAt,
-            member.MembershipStartDate,
-            member.MembershipEndDate,
-            member.IsActive
-        });
+        }).ToList();
 
-        if (!string.IsNullOrWhiteSpace(status))
+        if (isPaged)
         {
-            var normalizedStatus = AppStatuses.Normalize(status);
-            result = result.Where(member => AppStatuses.Normalize(member.Status) == normalizedStatus);
-        }
-
-        if (!string.IsNullOrWhiteSpace(attendance))
-        {
-            var normalizedAttendance = AppStatuses.Normalize(attendance);
-            result = normalizedAttendance switch
-            {
-                "CURRENT" or "CURRENTLY_CHECKED_IN" => result.Where(member => activeSet.Contains(member.Id)),
-                "TODAY" or "CHECKED_IN_TODAY" => result.Where(member => todaySet.Contains(member.Id)),
-                "NOT_TODAY" or "NOT_CHECKED_IN_TODAY" => result.Where(member => !todaySet.Contains(member.Id)),
-                _ => result
-            };
-        }
-
-        var resultList = result.ToList();
-        if (page.HasValue || pageSize.HasValue)
-        {
-            var safePageSize = Math.Clamp(pageSize ?? 15, 1, 100);
-            var safePage = Math.Max(page ?? 1, 1);
-            var totalCount = resultList.Count;
-            var totalPages = Math.Max(1, (int)Math.Ceiling(totalCount / (double)safePageSize));
-            var items = resultList
-                .Skip((safePage - 1) * safePageSize)
-                .Take(safePageSize)
-                .ToList();
-
             return Ok(new
             {
                 items,
@@ -198,7 +223,7 @@ public class MembersController : ControllerBase
             });
         }
 
-        return Ok(resultList);
+        return Ok(items);
     }
 
     [HttpGet("{id:long}")]

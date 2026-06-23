@@ -48,9 +48,7 @@ const healthFields: Array<keyof ProfileFormValues> = [
   "medications",
   "emergencyContactName",
   "emergencyContactRelationship",
-  "emergencyContactPhone",
-  "firstAidCprStatus",
-  "firstAidCprExpiration"
+  "emergencyContactPhone"
 ];
 
 function getFieldLabel(name: string): string {
@@ -78,14 +76,12 @@ function getFieldLabel(name: string): string {
     allergies: "Allergies",
     medicalActionPlans: "Medical Action Plans",
     injuries: "Injuries",
-    firstAidCprStatus: "First Aid / CPR Certification Status",
-    firstAidCprExpiration: "First Aid / CPR Expiration Date (YYYY-MM-DD)",
     medications: "Medications",
     healthNotes: "Health Notes",
-    emergencyContactName: "Emergency Contact Name",
-    emergencyContactRelationship: "Emergency Contact Relationship",
-    emergencyContactPhone: "Emergency Contact Phone",
-    emergencyContactAltPhone: "Emergency Contact Alt Phone",
+    emergencyContactName: "Emergency Contact Name (Optional)",
+    emergencyContactRelationship: "Emergency Contact Relationship (Optional)",
+    emergencyContactPhone: "Emergency Contact Phone (Optional)",
+    emergencyContactAltPhone: "Emergency Contact Alt Phone (Optional)",
     dailyCaloriesTarget: "Daily Calories Target (kcal)",
     proteinTargetGrams: "Protein Target (g)",
     carbsTargetGrams: "Carbohydrates Target (g)",
@@ -125,8 +121,6 @@ function getFieldPlaceholder(name: string): string {
     allergies: "e.g. None, Peanuts",
     medicalActionPlans: "e.g. Asthma action plan, EpiPen instructions",
     injuries: "e.g. None, Knee sprain",
-    firstAidCprStatus: "e.g. Certified, Expired, Not Certified",
-    firstAidCprExpiration: "e.g. 2027-12-31",
     medications: "e.g. None",
     healthNotes: "e.g. General health notes",
     emergencyContactName: "e.g. John Doe",
@@ -145,11 +139,12 @@ const dropdownOptions: Record<string, string[]> = {
   favoriteWorkoutType: ["Strength", "Cardio", "HIIT", "Yoga", "Pilates", "CrossFit"],
   language: ["English", "Arabic", "Spanish", "French"],
   theme: ["System", "Dark", "Light"],
-  measurementUnit: ["Metric", "Imperial"]
+  measurementUnit: ["Metric", "Imperial"],
+  preferredWorkoutTime: ["Morning", "Afternoon", "Evening", "Night", "Flexible"]
 };
 
 const numericFields: Array<keyof ProfileFormValues> = ["heightCm", "weightKg", "targetWeightKg", "dailyCaloriesTarget", "proteinTargetGrams", "carbsTargetGrams", "fatTargetGrams", "waterTargetMl"];
-const textFields: Array<keyof ProfileFormValues> = ["dob", "gender", "fitnessGoal", "activityLevel", "trainingExperience", "favoriteWorkoutType", "preferredTrainingDays", "preferredWorkoutTime", "medicalConditions", "allergies", "medicalActionPlans", "injuries", "medications", "emergencyContactName", "emergencyContactRelationship", "emergencyContactPhone", "firstAidCprStatus", "firstAidCprExpiration"];
+const textFields: Array<keyof ProfileFormValues> = ["dob", "gender", "fitnessGoal", "activityLevel", "trainingExperience", "favoriteWorkoutType", "preferredTrainingDays", "preferredWorkoutTime", "medicalConditions", "allergies", "medicalActionPlans", "injuries", "medications", "emergencyContactName", "emergencyContactRelationship", "emergencyContactPhone"];
 
 export function EditProfileScreen() {
   const queryClient = useQueryClient();
@@ -322,10 +317,69 @@ export function EditProfileScreen() {
                   control={control}
                   name={name}
                   render={({ field, fieldState }) => {
+                    if (name === "preferredTrainingDays") {
+                      const daysOfWeek = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+                      const selectedDays = typeof field.value === "string"
+                        ? field.value.split(",").map(d => d.trim()).filter(Boolean)
+                        : [];
+
+                      const toggleDay = (day: string) => {
+                        let newSelected: string[];
+                        if (selectedDays.includes(day)) {
+                          newSelected = selectedDays.filter(d => d !== day);
+                        } else {
+                          newSelected = daysOfWeek.filter(d => d === day || selectedDays.includes(d));
+                        }
+                        field.onChange(newSelected.join(", "));
+                      };
+
+                      return (
+                        <View style={styles.daysContainer} key={name}>
+                          <Text style={[styles.daysLabel, { color: theme.muted }]}>
+                            {getFieldLabel(String(name))}
+                          </Text>
+                          <View style={styles.chipsRow}>
+                            {daysOfWeek.map((day) => {
+                              const isSelected = selectedDays.includes(day);
+                              return (
+                                <TouchableOpacity
+                                  key={day}
+                                  onPress={() => toggleDay(day)}
+                                  style={[
+                                    styles.dayChip,
+                                    {
+                                      backgroundColor: isSelected ? theme.primary : theme.surface2,
+                                      borderColor: isSelected ? theme.primary : theme.border
+                                    }
+                                  ]}
+                                >
+                                  <Text
+                                    style={[
+                                      styles.dayChipText,
+                                      {
+                                        color: isSelected ? "#FFFFFF" : theme.text
+                                      }
+                                    ]}
+                                  >
+                                    {day}
+                                  </Text>
+                                </TouchableOpacity>
+                              );
+                            })}
+                          </View>
+                          {fieldState.error?.message ? (
+                            <Text style={[styles.errorText, { color: theme.danger }]}>
+                              {fieldState.error.message}
+                            </Text>
+                          ) : null}
+                        </View>
+                      );
+                    }
+
                     const isSelect = dropdownOptions[String(name)] !== undefined || name === "dob";
                     if (isSelect) {
                       return (
-                        <Pressable onPress={() => handleSelectPress(name, field.value)}>
+                        <Pressable key={name} onPress={() => handleSelectPress(name, field.value)}>
                           <View pointerEvents="none">
                             <ForgeInput
                               label={getFieldLabel(String(name))}
@@ -341,6 +395,7 @@ export function EditProfileScreen() {
                     }
                     return (
                       <ForgeInput
+                        key={name}
                         label={getFieldLabel(String(name))}
                         placeholder={getFieldPlaceholder(String(name))}
                         value={(field.value as string | undefined) ?? ""}
@@ -356,6 +411,15 @@ export function EditProfileScreen() {
 
           {activeTab === "health" && (
             <View style={styles.formSection}>
+              <View style={[styles.privacyBanner, { backgroundColor: theme.surface2, borderColor: theme.border }]}>
+                <MaterialCommunityIcons name="shield-lock-outline" size={24} color={theme.primary} />
+                <View style={styles.privacyTextContainer}>
+                  <Text style={[styles.privacyTitle, { color: theme.text }]}>Confidential Health Information</Text>
+                  <Text style={[styles.privacyDesc, { color: theme.muted }]}>
+                    Your medical and emergency contact details are kept strictly private. They are only used to ensure your safety during workouts.
+                  </Text>
+                </View>
+              </View>
               {healthFields.map((name) => (
                 <Controller
                   key={name}
@@ -368,6 +432,7 @@ export function EditProfileScreen() {
                       value={(field.value as string | undefined) ?? ""}
                       onChangeText={field.onChange}
                       error={fieldState.error?.message}
+                      keyboardType={name === "emergencyContactPhone" ? "phone-pad" : undefined}
                       multiline={["medicalConditions", "allergies", "injuries", "medications", "healthNotes", "medicalActionPlans"].includes(String(name))}
                     />
                   )}
@@ -656,5 +721,59 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "800",
     flex: 1
+  },
+  daysContainer: {
+    marginVertical: 4,
+    gap: 8
+  },
+  daysLabel: {
+    fontSize: 13,
+    fontWeight: "700",
+    letterSpacing: 0
+  },
+  chipsRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginTop: 4
+  },
+  dayChip: {
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 20,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center"
+  },
+  dayChipText: {
+    fontSize: 14,
+    fontWeight: "800"
+  },
+  errorText: {
+    fontSize: 12,
+    fontWeight: "800",
+    marginTop: 4
+  },
+  privacyBanner: {
+    flexDirection: "row",
+    gap: 12,
+    padding: 16,
+    borderRadius: 18,
+    borderWidth: 1,
+    marginBottom: 10,
+    alignItems: "center"
+  },
+  privacyTextContainer: {
+    flex: 1,
+    gap: 2
+  },
+  privacyTitle: {
+    fontSize: 14,
+    fontWeight: "900"
+  },
+  privacyDesc: {
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: "600"
   }
 });

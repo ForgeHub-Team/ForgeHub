@@ -85,8 +85,6 @@ export const profileSchema = z.object({
   doctorClearanceRequired: z.boolean().optional(),
   healthNotes: z.string().optional(),
   medicalActionPlans: z.string().optional(),
-  firstAidCprStatus: z.string().optional(),
-  firstAidCprExpiration: z.string().optional(),
   emergencyContactName: z.string().optional(),
   emergencyContactRelationship: z.string().optional(),
   emergencyContactPhone: phone,
