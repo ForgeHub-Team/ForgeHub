@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   Bar,
@@ -24,6 +24,8 @@ import { ErrorState } from "../../components/ui/ErrorState";
 import { LoadingState } from "../../components/ui/LoadingState";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { useApi } from "../../hooks/useApi";
+import { useAppDispatch, useAppSelector } from "../../hooks/storeHooks";
+import { fetchOwnerDashboard } from "../../store/dashboardSlice";
 import { dateLabel, money, percent } from "../../utils/formatters";
 
 type PanelKey = "revenue" | "branches" | "members" | "expired" | "capacity" | "payments" | "plans" | "team" | "attention";
@@ -538,10 +540,15 @@ function DashboardContent({ data }: { data: OwnerDashboard }) {
 }
 
 export function GymOwnerDashboard() {
-  const { data, loading, error } = useApi(ownerDashboardApi.getDashboard, []);
+  const dispatch = useAppDispatch();
+  const { data, loading, error } = useAppSelector((state) => state.dashboard.owner);
 
-  if (loading) return <LoadingState label="Loading owner dashboard..." />;
-  if (error) return <ErrorState message={error} />;
+  useEffect(() => {
+    dispatch(fetchOwnerDashboard());
+  }, [dispatch]);
+
+  if (loading && !data) return <LoadingState label="Loading owner dashboard..." />;
+  if (error && !data) return <ErrorState message={error} />;
   if (!data) return <EmptyState title="No dashboard data available yet." />;
 
   return <DashboardContent data={data} />;

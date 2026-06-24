@@ -50,6 +50,7 @@ public class AuthService : IAuthService
 
         var user = await _context.Users
             .Include(item => item.Role)
+            .Include(item => item.Gym)
             .FirstOrDefaultAsync(item =>
                 (item.Email != null && item.Email.ToLower() == normalizedIdentifier) ||
                 item.Phone == identifier ||
@@ -79,9 +80,10 @@ public class AuthService : IAuthService
 
         var user = await _context.Users
             .Include(item => item.Role)
+            .Include(item => item.Gym)
             .FirstOrDefaultAsync(item => item.Id == session.UserId);
 
-        if (user?.Role == null || !user.IsActive)
+        if (user?.Role == null || !user.IsActive || (user.GymId.HasValue && user.Gym != null && !user.Gym.IsActive))
         {
             throw new UnauthorizedAccessException("User session is no longer active.");
         }
@@ -114,6 +116,7 @@ public class AuthService : IAuthService
         var normalizedEmail = email.Trim().ToLowerInvariant();
         var user = await _context.Users
             .Include(item => item.Role)
+            .Include(item => item.Gym)
             .FirstOrDefaultAsync(item => item.Email != null && item.Email.ToLower() == normalizedEmail);
 
         if (user?.Role == null)
@@ -149,6 +152,11 @@ public class AuthService : IAuthService
         if (!user.IsActive)
         {
             throw new UnauthorizedAccessException("Account is deactivated.");
+        }
+
+        if (user.GymId.HasValue && user.Gym != null && !user.Gym.IsActive)
+        {
+            throw new UnauthorizedAccessException("Your gym account is deactivated. Please contact support.");
         }
     }
 

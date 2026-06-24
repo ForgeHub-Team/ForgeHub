@@ -307,7 +307,7 @@ public class GymsController : ControllerBase
             Name = gym.Name,
             OwnerUserId = gym.OwnerUserId ?? owner?.Id,
             OwnerName = linkedOwners.Count == 0 ? "No owners assigned" : string.Join(", ", linkedOwners.Select(item => string.IsNullOrWhiteSpace(item.FullName) ? item.Email : item.FullName)),
-            Owners = linkedOwners.Select(ToGymOwnerResponse).ToList(),
+            Owners = linkedOwners.Select(o => ToGymOwnerResponse(o, gym.IsActive)).ToList(),
             OwnerCount = linkedOwners.Count,
             OwnerEmails = linkedOwners.Select(item => item.Email ?? string.Empty).Where(item => !string.IsNullOrWhiteSpace(item)).ToList(),
             OwnerPhones = linkedOwners.Select(item => item.Phone ?? string.Empty).Where(item => !string.IsNullOrWhiteSpace(item)).ToList(),
@@ -323,7 +323,7 @@ public class GymsController : ControllerBase
         };
     }
 
-    private static GymOwnerResponse ToGymOwnerResponse(User owner)
+    private static GymOwnerResponse ToGymOwnerResponse(User owner, bool gymActive)
     {
         return new GymOwnerResponse
         {
@@ -331,7 +331,7 @@ public class GymsController : ControllerBase
             Name = owner.FullName ?? string.Empty,
             Email = owner.Email ?? string.Empty,
             Phone = owner.Phone,
-            IsActive = owner.IsActive
+            IsActive = owner.IsActive && gymActive
         };
     }
 

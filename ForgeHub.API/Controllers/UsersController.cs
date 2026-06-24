@@ -555,7 +555,8 @@ public class UsersController : ControllerBase
     {
         var ownedGym = gyms.FirstOrDefault(gym => gym.OwnerUserId == user.Id);
         var scopedGym = gyms.FirstOrDefault(gym => gym.Id == user.GymId);
-        var gymName = scopedGym?.Name ?? ownedGym?.Name ?? "ForgeHub";
+        var activeGym = scopedGym ?? ownedGym;
+        var gymName = activeGym?.Name ?? "ForgeHub";
         EmployeeTeamInfo? employee = null;
         employeeInfo?.TryGetValue(user.Id, out employee);
         var effectiveBranchId = user.BranchId ?? employee?.BranchId;
@@ -574,7 +575,7 @@ public class UsersController : ControllerBase
             Role = roleName,
             Title = roleName,
             Workspace = branchName,
-            IsActive = user.IsActive
+            IsActive = user.IsActive && (activeGym == null || activeGym.IsActive)
         };
     }
 

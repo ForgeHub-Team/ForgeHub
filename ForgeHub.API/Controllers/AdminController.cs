@@ -326,24 +326,30 @@ public class AdminController : ControllerBase
                     CreatedAt = gym.CreatedAt
                 };
             }).ToList(),
-            Branches = branches.Select(branch => new AdminBranchDto
-            {
-                Id = branch.Id,
-                GymId = branch.GymId,
-                Name = branch.Name ?? "Branch",
-                City = string.IsNullOrWhiteSpace(branch.Address) ? "Unknown" : branch.Address,
-                Address = branch.Address ?? string.Empty,
-                Status = branch.IsActive ? "Healthy" : "Inactive",
-                Capacity = branch.Capacity,
-                Lat = branch.Lat,
-                Lng = branch.Lng,
-                RangeKm = branch.RangeKm,
-                Members = members.Count(member => member.HomeBranchId == branch.Id),
-                Revenue = payments.Where(payment => payment.BranchId == branch.Id).Sum(payment => payment.Amount ?? 0m),
-                ActiveToday = todayCheckIns.Count(checkIn => checkIn.BranchId == branch.Id),
-                Manager = users.FirstOrDefault(user =>
-                    user.BranchId == branch.Id &&
-                    string.Equals(user.Role?.Name, AppRoles.BranchManager, StringComparison.OrdinalIgnoreCase))?.FullName ?? "Unassigned"
+            Branches = branches.Select(branch => {
+                var parentGym = gyms.FirstOrDefault(gym => gym.Id == branch.GymId);
+                var branchStatus = !branch.IsActive
+                    ? "Inactive"
+                    : (parentGym == null || parentGym.IsActive ? "Healthy" : "Suspended");
+                return new AdminBranchDto
+                {
+                    Id = branch.Id,
+                    GymId = branch.GymId,
+                    Name = branch.Name ?? "Branch",
+                    City = string.IsNullOrWhiteSpace(branch.Address) ? "Unknown" : branch.Address,
+                    Address = branch.Address ?? string.Empty,
+                    Status = branchStatus,
+                    Capacity = branch.Capacity,
+                    Lat = branch.Lat,
+                    Lng = branch.Lng,
+                    RangeKm = branch.RangeKm,
+                    Members = members.Count(member => member.HomeBranchId == branch.Id),
+                    Revenue = payments.Where(payment => payment.BranchId == branch.Id).Sum(payment => payment.Amount ?? 0m),
+                    ActiveToday = todayCheckIns.Count(checkIn => checkIn.BranchId == branch.Id),
+                    Manager = users.FirstOrDefault(user =>
+                        user.BranchId == branch.Id &&
+                        string.Equals(user.Role?.Name, AppRoles.BranchManager, StringComparison.OrdinalIgnoreCase))?.FullName ?? "Unassigned"
+                };
             }).ToList(),
             Users = users.Select(user => ToAdminUser(user, gyms, branches)).ToList(),
             Trainers = trainers.Select(user => ToAdminUser(user, gyms, branches)).ToList(),
@@ -910,13 +916,16 @@ public class AdminController : ControllerBase
 
     private AdminUserDto ToAdminUser(User user, IReadOnlyCollection<Gym> gyms, IReadOnlyCollection<Branch> branches)
     {
-        var gymName = gyms.FirstOrDefault(gym => gym.Id == user.GymId)?.Name ?? "ForgeHub";
+        var ownedGym = gyms.FirstOrDefault(gym => gym.OwnerUserId == user.Id);
+        var scopedGym = gyms.FirstOrDefault(gym => gym.Id == user.GymId);
+        var activeGym = scopedGym ?? ownedGym;
+        var gymName = activeGym?.Name ?? "ForgeHub";
         var branchName = branches.FirstOrDefault(branch => branch.Id == user.BranchId)?.Name ?? gymName;
 
         return new AdminUserDto
         {
             Id = user.Id,
-            GymId = user.GymId,
+            GymId = user.GymId ?? ownedGym?.Id,
             BranchId = user.BranchId,
             RoleId = user.RoleId,
             Name = user.FullName ?? string.Empty,
@@ -925,7 +934,7 @@ public class AdminController : ControllerBase
             Role = user.Role?.Name ?? string.Empty,
             Title = user.Role?.Name ?? string.Empty,
             Workspace = branchName,
-            IsActive = user.IsActive
+            IsActive = user.IsActive && (activeGym == null || activeGym.IsActive)
         };
     }
 

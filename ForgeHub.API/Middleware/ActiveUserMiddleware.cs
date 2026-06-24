@@ -26,15 +26,15 @@ public class ActiveUserMiddleware
         if (context.User.Identity?.IsAuthenticated == true &&
             long.TryParse(context.User.FindFirstValue(ClaimTypes.NameIdentifier), out var userId))
         {
-            var isActive = await dbContext.Users
+            var userState = await dbContext.Users
                 .Where(user => user.Id == userId)
-                .Select(user => user.IsActive)
+                .Select(user => new { user.IsActive, GymActive = user.Gym == null || user.Gym.IsActive })
                 .FirstOrDefaultAsync();
 
-            if (!isActive)
+            if (userState == null || !userState.IsActive || !userState.GymActive)
             {
                 context.Response.StatusCode = StatusCodes.Status401Unauthorized;
-                await context.Response.WriteAsJsonAsync(new { message = "User account is inactive." });
+                await context.Response.WriteAsJsonAsync(new { message = "User account or gym is inactive." });
                 return;
             }
         }

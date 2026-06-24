@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   Bar,
@@ -26,6 +26,8 @@ import { ErrorState } from "../../components/ui/ErrorState";
 import { LoadingState } from "../../components/ui/LoadingState";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { useApi } from "../../hooks/useApi";
+import { useAppDispatch, useAppSelector } from "../../hooks/storeHooks";
+import { fetchSuperAdminDashboard, fetchAuditLogs } from "../../store/dashboardSlice";
 import type { Gym } from "../../types/gym";
 import { cleanLabel, dateLabel, money, percent } from "../../utils/formatters";
 
@@ -464,9 +466,15 @@ function buildAuditRows(logs: AuditLog[], data: AdminWorkspace): AuditRow[] {
 }
 
 export function SuperAdminDashboard() {
-  const workspace = useApi(() => dashboardApi.getWorkspace(), []);
-  const audit = useApi(() => auditLogsApi.getAuditLogs(), []);
+  const dispatch = useAppDispatch();
+  const workspace = useAppSelector((state) => state.dashboard.superadmin);
+  const audit = useAppSelector((state) => state.dashboard.auditLogs);
   const [activePanel, setActivePanel] = useState<PanelKey | null>(null);
+
+  useEffect(() => {
+    dispatch(fetchSuperAdminDashboard());
+    dispatch(fetchAuditLogs());
+  }, [dispatch]);
 
   const data = workspace.data;
   const auditLogs = audit.data ?? [];
@@ -485,8 +493,8 @@ export function SuperAdminDashboard() {
   const healthRows = useMemo(() => data ? buildHealthRows(gymRows, data, revenueRows) : [], [data, gymRows, revenueRows]);
   const auditRows = useMemo(() => data ? buildAuditRows(auditLogs, data) : [], [auditLogs, data]);
 
-  if (workspace.loading) return <LoadingState label="Loading platform dashboard..." />;
-  if (workspace.error) return <ErrorState message={workspace.error} />;
+  if (workspace.loading && !data) return <LoadingState label="Loading platform dashboard..." />;
+  if (workspace.error && !data) return <ErrorState message={workspace.error} />;
   if (!data) return <EmptyState title="No platform data available yet." />;
 
   const totalGyms = gymRows.length;

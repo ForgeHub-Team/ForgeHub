@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   Bar,
@@ -22,6 +22,8 @@ import { ErrorState } from "../../components/ui/ErrorState";
 import { LoadingState } from "../../components/ui/LoadingState";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { useApi } from "../../hooks/useApi";
+import { useAppDispatch, useAppSelector } from "../../hooks/storeHooks";
+import { fetchManagerDashboard } from "../../store/dashboardSlice";
 import { dateLabel, money, percent, timeLabel } from "../../utils/formatters";
 
 type PanelKey = "inside" | "attendance" | "payments" | "expiring" | "suspicious" | "classes" | "team" | "reports";
@@ -415,10 +417,19 @@ function DashboardContent({ data, reload }: { data: ManagerDashboard; reload: ()
 }
 
 export function BranchManagerDashboard() {
-  const { data, loading, error, reload } = useApi(managerDashboardApi.getDashboard, []);
+  const dispatch = useAppDispatch();
+  const { data, loading, error } = useAppSelector((state) => state.dashboard.manager);
 
-  if (loading) return <LoadingState label="Loading branch dashboard..." />;
-  if (error) return <ErrorState message={error} />;
+  useEffect(() => {
+    dispatch(fetchManagerDashboard());
+  }, [dispatch]);
+
+  const reload = () => {
+    dispatch(fetchManagerDashboard({ forceRefetch: true }));
+  };
+
+  if (loading && !data) return <LoadingState label="Loading branch dashboard..." />;
+  if (error && !data) return <ErrorState message={error} />;
   if (!data) return <EmptyState title="No branch dashboard data available yet." />;
 
   return <DashboardContent data={data} reload={reload} />;
